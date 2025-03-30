@@ -1,4 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import { server } from '@/app/config';
+
+// Features not supported
+// -- Synced blocks (works but not implemented)
+// -- Full width pages (Notion does not expose it through API). Workaround would be possible
+// -- Small text pages (for same reason, notion does not expose this)
+// -- 
+// -- TAble of contents - no smooth scrolling to the anchor
 
 async function fetchChildrenRecursively(notion: any, blockId: string) {
     const children = [];
@@ -25,13 +33,29 @@ async function fetchChildrenRecursively(notion: any, blockId: string) {
     return children;
 }
 
+async function fetchBookmarkMetadata(url: string) {
+    try {
+        const response = await fetch(server + `/api/bookmark-metadata?url=${encodeURIComponent(url)}`);
+        if (!response.ok) throw new Error('Failed to fetch metadata');
+        return await response.json();
+    } catch (error) {
+        console.error('Metadata fetch failed:', error);
+        return {
+            title: new URL(url).hostname,
+            description: '',
+            favicon: `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`,
+            image: null
+        };
+    }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // Notion SDK for JavaScript
     const { Client } = require("@notionhq/client");
     const notion = new Client({ auth: process.env.NOTION_KEY });
 
-    const masterBlockId = "1c4aaa7b984780faa521e1585038a94b"; // PageID
+    const masterBlockId = "1c4aaa7b9847801f9c43e7ee460658a9"; // PageID
     const blocks = await notion.blocks.children.list({
         block_id: masterBlockId,
         page_size: 100,
@@ -44,7 +68,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     results.push({ master: parentPage });
 
     for (const block of blocks.results) {
-        if (block.type === 'child_page') {
+        if (block.type === 'bookmark') {
+            const url = block.bookmark.url;
+            block.bookmark.metadata = await fetchBookmarkMetadata(url); // Fetch and store metadata
+            results.push({ block });
+        } else if (block.type === 'child_page') {
             const page = await notion.pages.retrieve({ page_id: block.id });
             results.push({ block, page });
         } else if (block.type === 'toggle') {

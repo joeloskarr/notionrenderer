@@ -2,6 +2,7 @@
 import Image from "next/image";
 import styles from "./page.module.css";
 import { useState, useEffect } from "react";
+import Prism from 'prismjs';
 
 export default function Home() {
 

@@ -15,17 +15,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   //const blocks = exampleBlocks;
   const blocks = await response.json();
 
+  // Function to escape HTML special characters
+  function escapeHTML(str: string): string {
+    return str
+      .replace(/&/g, "\&")
+      .replace(/</g, "\<")
+      .replace(/>/g, "\>")
+      .replace(/"/g, '\"')
+      .replace(/'/g, "\'");
+  }
+
   // Function to parse rich text annotations and generate HTML
   function parseRichTextToHTML(richText: any[]): string {
-    const escapeHTML = (str: string): string => {
-      return str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    };
-
     return richText.map((textObj) => {
       const { content } = textObj.text;
       const { bold, italic, strikethrough, underline, code, color } = textObj.annotations;
@@ -76,8 +77,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               <span class="emoji">${block.page.icon?.emoji || '📄'}</span> <span class="alink">${block.page.properties.title.title[0].plain_text}</span>
             </a>
           </div>`;
+      case 'heading_1':
+        return `<h2>${parseRichTextToHTML(block.block.heading_1.rich_text)}</h2>`;
       case 'heading_2':
         return `<h3>${parseRichTextToHTML(block.block.heading_2.rich_text)}</h3>`;
+      case 'heading_3':
+        return `<h4>${parseRichTextToHTML(block.block.heading_3.rich_text)}</h4>`;
       case 'divider':
         return `<div class="divider" />`;
       case 'callout':
@@ -94,7 +99,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ${parseRichTextToHTML(block.block.callout.rich_text)}
           </div>`;
       case 'column_list':
-        return `<div class="column-list"></div>`;
+        return `
+          <div class="column-list">
+            ${block.block.children
+            .map((column: any, index: number, array: any[]) => `
+                ${renderBlock({ block: column })}
+                ${index < array.length ? '<div class="column-divider"></div>' : ''}
+              `).join('')}
+          </div>`;
+      case 'column':
+        return `
+          <div class="column">
+            ${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}
+          </div>`;
       case 'image':
         const imageUrl = block.block.image.file.url;
         const caption = block.block.image.caption.map((textObj: any) => textObj.plain_text).join(' ');
@@ -118,11 +135,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return `<li>${parseRichTextToHTML(block.block.bulleted_list_item.rich_text)}</li>`;
       case 'numbered_list_item':
         return `<li>${parseRichTextToHTML(block.block.numbered_list_item.rich_text)}</li>`;
+      case 'code':
+        const Prism = require('prismjs');
+        const loadLanguages = require('prismjs/components/');
+        const codeContent = block.block.code.rich_text.map((textObj: any) => textObj.plain_text).join('');
+        const codeLanguage = block.block.code.language || 'plaintext';
+        loadLanguages([codeLanguage]);
+        const highlightedCode = Prism.highlight(escapeHTML(codeContent), Prism.languages[codeLanguage], codeLanguage);
+        return `
+          <div class="code-block-container">
+            <div class="code-block-header">
+              <span class="code-language">${codeLanguage}</span>
+              <button class="copy-button" onclick="navigator.clipboard.writeText(\`${escapeHTML(codeContent)}\`)">Copy</button>
+            </div>
+            <pre class="code-block" style="overflow-x: auto; white-space: pre;"><code class="language-${codeLanguage}">${highlightedCode}</code></pre>
+          </div>`;
+      case 'table_of_contents':
+        return renderTableOfContents(blocks); // Render the table of contents
+      case 'bookmark': {
+        const { url, metadata } = block.block.bookmark;
+        const hostname = new URL(url).hostname.replace('www.', '');
+
+        return `
+        <div class="notion-bookmark">
+          <a href="${url}" target="_blank" class="notion-bookmark-link">
+            <div class="notion-bookmark-content">
+              <div class="notion-bookmark-text">
+                <div class="notion-bookmark-title">
+                  ${metadata.title}
+                </div>
+                ${metadata.description ? `
+                <div class="notion-bookmark-description">
+                  ${metadata.description}
+                </div>` : ''}
+              </div>
+              <div class="notion-bookmark-href">
+                <img src="${metadata.favicon}" 
+                     class="notion-bookmark-favicon" />
+                <span>${url}</span>
+              </div>
+            </div>
+            ${metadata.image ? `
+            <div class="notion-bookmark-image">
+              <img src="${metadata.image}" alt="${metadata.description || ''}" />
+            </div>` : ''}
+          </a>
+        </div>
+      `;
+      }
+
       default:
         return '';
     }
   }
-
 
   function renderHeader() {
     let html1 = "<div class='layout-content'>";
@@ -146,6 +211,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       html += '</div>';
     });
     html += type === 'numbered_list_item' ? '</ol>' : '</ul>';
+    return html;
+  }
+
+  function renderTableOfContents(blocks: any[]): string {
+    const headings = blocks.filter((block: any) => {
+      const type = block.block?.type || block.type;
+      return type === 'heading_1' || type === 'heading_2' || type === 'heading_3';
+    });
+
+    if (headings.length === 0) return ''; // No headings, no table of contents
+
+    let html = '<div class="table-of-contents"><ul>';
+
+    headings.forEach((block: any) => {
+      const type = block.block?.type || block.type;
+      const headingText = block.block[type].rich_text.map((textObj: any) => textObj.plain_text).join(''); // Use plain text
+      const headingId = block.block.id;
+
+      let listItemClass = '';
+      if (type === 'heading_1') listItemClass = 'toc-heading-1';
+      else if (type === 'heading_2') listItemClass = 'toc-heading-2';
+      else if (type === 'heading_3') listItemClass = 'toc-heading-3';
+
+      html += `<div class="block" id="${block.block.id}">`;
+
+      html += `<li class="${listItemClass}"><a href="#${headingId}"><span class="link">${headingText}</span></a></li>`;
+
+      html += '</div>';
+    });
+
+    html += '</ul></div>';
     return html;
   }
 
