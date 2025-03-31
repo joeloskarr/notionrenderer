@@ -5,8 +5,9 @@ import { server } from '@/app/config';
 // -- Synced blocks (works but not implemented)
 // -- Full width pages (Notion does not expose it through API). Workaround would be possible
 // -- Small text pages (for same reason, notion does not expose this)
-// -- 
+// -- Link Page blocks (API does not support)
 // -- TAble of contents - no smooth scrolling to the anchor
+// -- Mono/Serif fonts (Notion does not expose these changes through the API). 
 
 async function fetchChildrenRecursively(notion: any, blockId: string) {
     const children = [];
@@ -55,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { Client } = require("@notionhq/client");
     const notion = new Client({ auth: process.env.NOTION_KEY });
 
-    const masterBlockId = "1c4aaa7b9847801f9c43e7ee460658a9"; // PageID
+    const masterBlockId = "1c4aaa7b98478094af20d0b836b15ca5"; // PageID
     const blocks = await notion.blocks.children.list({
         block_id: masterBlockId,
         page_size: 100,
@@ -80,8 +81,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 block_id: block.id,
                 page_size: 100,
             });
-            const children = childrenResponse.results;
-            results.push({ block, children })
+            block.children = childrenResponse.results;
+            results.push({ block });
         } else if (block.type === 'synced_block') { //TODO: Works but Notion is not outputting it for some reason
             const syncedFromId = block.synced_block.synced_from?.block_id;
             if (syncedFromId && !blocks.results.some((b: any) => b.id === syncedFromId)) {
@@ -94,10 +95,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             if (block.has_children) {
                 block.children = await fetchChildrenRecursively(notion, block.id);
                 results.push({ block: block });
-            } else
-                results.push({ block })
+            } else {
+                results.push({ block });
+            }
         } else {
-            results.push({ block })
+            if (block.has_children) {
+                block.children = await fetchChildrenRecursively(notion, block.id);
+            }
+            results.push({ block });
         }
     }
     return res.status(200).json(results);

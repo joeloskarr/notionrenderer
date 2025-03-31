@@ -28,7 +28,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Function to parse rich text annotations and generate HTML
   function parseRichTextToHTML(richText: any[]): string {
     return richText.map((textObj) => {
-      const { content } = textObj.text;
+      let content;
+      if (textObj.text) {
+        content = textObj.text.content;
+      } else
+        content = textObj.plain_text; // Fallback to plain_text if content is not available
       const { bold, italic, strikethrough, underline, code, color } = textObj.annotations;
 
       let html = escapeHTML(content); // Escape HTML special characters
@@ -52,8 +56,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Handle links
-      if (textObj.text.link) {
-        html = `<a href="${textObj.text.link.url}">${html}</a>`;
+      if (textObj.text?.link || textObj.href) {
+        html = `<a href="${textObj.text?.link?.url || textObj.href}">${html}</a>`;
       }
 
       return html;
@@ -67,22 +71,60 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (block.block) type = block.block.type
     else type = block.type;
 
+    const blockColor = block.block?.color || block.color;
+    const blockStyle = blockColor && blockColor.includes("_background")
+      ? `background-color: var(--color-bg-${blockColor.split("_")[0]});`
+      : "";
+
+    function mergeStyle(existingStyle: string, newStyle: string): string {
+      return existingStyle
+        ? `${existingStyle.trim().endsWith(";") ? existingStyle.trim() : existingStyle.trim() + ";"} ${newStyle}`
+        : newStyle;
+    }
+
     switch (type) {
       case 'paragraph':
-        return `<p>${parseRichTextToHTML(block.block.paragraph.rich_text)}</p>`;
+        return `<p style="${mergeStyle(block.block?.paragraph?.style || "", blockStyle)}">${parseRichTextToHTML(block.block.paragraph.rich_text)}</p>`;
       case 'child_page':
         return `
-          <div class="child-page">
+          <div class="child-page" style="${mergeStyle("", blockStyle)}">
             <a href="${block.page.public_url}" target="_blank">
               <span class="emoji">${block.page.icon?.emoji || '📄'}</span> <span class="alink">${block.page.properties.title.title[0].plain_text}</span>
             </a>
           </div>`;
       case 'heading_1':
-        return `<h2>${parseRichTextToHTML(block.block.heading_1.rich_text)}</h2>`;
+        if (block.block.heading_1.is_toggleable) {
+          return `
+            <details style="${mergeStyle("margin: 10px 0; padding: 5px; border-radius: 5px;", blockStyle)}">
+              <summary><h2>${parseRichTextToHTML(block.block.heading_1.rich_text)}</h2></summary>
+              <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
+            </details>`;
+        }
+        return `<h2 style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block.heading_1.rich_text)}</h2>`;
       case 'heading_2':
-        return `<h3>${parseRichTextToHTML(block.block.heading_2.rich_text)}</h3>`;
+        if (block.block.heading_2.is_toggleable) {
+          return `
+            <details style="${mergeStyle("margin: 10px 0; padding: 5px; border-radius: 5px;", blockStyle)}">
+              <summary><h3>${parseRichTextToHTML(block.block.heading_2.rich_text)}</h3></summary>
+              <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
+            </details>`;
+        }
+        return `<h3 style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block.heading_2.rich_text)}</h3>`;
       case 'heading_3':
-        return `<h4>${parseRichTextToHTML(block.block.heading_3.rich_text)}</h4>`;
+        if (block.block.heading_3.is_toggleable) {
+          return `
+            <details style="${mergeStyle("margin: 10px 0; padding: 5px; border-radius: 5px;", blockStyle)}">
+              <summary><h4>${parseRichTextToHTML(block.block.heading_3.rich_text)}</h4></summary>
+              <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
+            </details>`;
+        }
+        return `<h4 style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block.heading_3.rich_text)}</h4>`;
+      case 'toggle':
+        return `
+          <details style="margin: 10px 0; padding: 5px; border-radius: 5px;">
+            <summary>${parseRichTextToHTML(block.block.toggle.rich_text)}</summary>
+            <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
+          </details>`;
       case 'divider':
         return `<div class="divider" />`;
       case 'callout':
@@ -94,14 +136,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? `background-color:${calloutCssVariable};`
           : `color:${calloutCssVariable};`;
         return `
-          <div class="callout" style="${calloutStyle}">
+          <div class="callout" style="${mergeStyle(calloutStyle, blockStyle)}">
             <span class="callout-icon">${block.block.callout.icon.emoji}</span>
             ${parseRichTextToHTML(block.block.callout.rich_text)}
           </div>`;
       case 'column_list':
         return `
           <div class="column-list">
-            ${block.block.children
+            ${block.block.block.children
             .map((column: any, index: number, array: any[]) => `
                 ${renderBlock({ block: column })}
                 ${index < array.length ? '<div class="column-divider"></div>' : ''}
@@ -110,31 +152,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       case 'column':
         return `
           <div class="column">
-            ${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}
+            ${(block.block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}
           </div>`;
       case 'image':
         const imageUrl = block.block.image.file.url;
         const caption = block.block.image.caption.map((textObj: any) => textObj.plain_text).join(' ');
         return `
-          <div class="image-block">
+          <div class="image-block" style="${mergeStyle("", blockStyle)}">
             <img src="${imageUrl}" alt="${caption}" />
             ${caption ? `<div class="image-caption">${caption}</div>` : ''}
           </div>`;
       case 'quote':
         return `
-          <blockquote style="border-left: 4px solid var(--color-text-${block.block.quote.color || 'default'}); padding-left: 10px; margin: 10px 0;">
+          <blockquote style="${mergeStyle(`border-left: 4px solid var(--color-text-${block.block.quote.color || 'default'}); padding-left: 10px; margin: 10px 0;`, blockStyle)}">
             ${parseRichTextToHTML(block.block.quote.rich_text)}
           </blockquote>`;
-      case 'toggle':
-        return `
-          <details style="margin: 10px 0; padding: 5px; border-radius: 5px;">
-            <summary>${parseRichTextToHTML(block.block.toggle.rich_text)}</summary>
-            <div class='toggle-children'>${(block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
-          </details>`;
       case 'bulleted_list_item':
-        return `<li>${parseRichTextToHTML(block.block.bulleted_list_item.rich_text)}</li>`;
+        return `<li style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block.bulleted_list_item.rich_text)}</li>`;
       case 'numbered_list_item':
-        return `<li>${parseRichTextToHTML(block.block.numbered_list_item.rich_text)}</li>`;
+        return `<li style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block.numbered_list_item.rich_text)}</li>`;
       case 'code':
         const Prism = require('prismjs');
         const loadLanguages = require('prismjs/components/');
@@ -143,7 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         loadLanguages([codeLanguage]);
         const highlightedCode = Prism.highlight(escapeHTML(codeContent), Prism.languages[codeLanguage], codeLanguage);
         return `
-          <div class="code-block-container">
+          <div class="code-block-container" style="${mergeStyle("", blockStyle)}">
             <div class="code-block-header">
               <span class="code-language">${codeLanguage}</span>
               <button class="copy-button" onclick="navigator.clipboard.writeText(\`${escapeHTML(codeContent)}\`)">Copy</button>
@@ -183,9 +219,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         </div>
       `;
       }
+      case 'to_do': {
+        const todo = block.block.to_do;
+        const isChecked = todo.checked;
+        const colorClass = todo.color !== 'default' ? ` notion-todo-${todo.color}` : '';
+
+        return `
+          <div class="notion-todo${colorClass}${isChecked ? ' checked' : ''}">
+            <div class="notion-todo-checkbox">
+              ${isChecked ? `
+                <svg viewBox="0  0 14 14" class="checkmark">
+                  <path d="M5.5 12L14 3.5 12.5 2l-7 7-4-4.003L0 6.499z" fill="currentColor"/>
+                </svg>
+              ` : ''}
+            </div>
+            <div class="notion-todo-text">
+              ${parseRichTextToHTML(todo.rich_text)}
+            </div>
+          </div>
+        `;
+      }
 
       default:
-        return '';
+        return `<div style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block?.rich_text || [])}</div>`;
     }
   }
 
@@ -205,8 +261,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       html += `<div class="block" id="${block.id}">`;
       html += renderBlock({ block: block });
 
-      if (block.children?.length > 0) {
-        html += renderNestedList(block.children, type);
+      if (block.block.children?.length > 0) {
+        html += renderNestedList(block.block.children, type);
       }
       html += '</div>';
     });

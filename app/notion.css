@@ -123,8 +123,8 @@ h1 {
 }
 
 h2 {
+    display: inline-block;
     max-width: 100%;
-    width: 100%;
     white-space: pre-wrap;
     word-break: break-word;
     caret-color: rgb(55, 53, 47);
@@ -137,8 +137,8 @@ h2 {
 }
 
 h3 {
+    display: inline-block;
     max-width: 100%;
-    width: 100%;
     white-space: pre-wrap;
     word-break: break-word;
     caret-color: rgb(55, 53, 47);
@@ -163,8 +163,8 @@ div.block:has(h4) {
 }
 
 h4 {
+    display: inline-block;
     max-width: 100%;
-    width: 100%;
     white-space: pre-wrap;
     word-break: break-word;
     caret-color: rgb(55, 53, 47);
@@ -426,13 +426,12 @@ h1 {
 /* Add to your CSS */
 .notion-bookmark {
     border-radius: 6px;
-    margin: 8px 0;
     transition: all 0.1s ease;
     border: 1px solid rgba(55, 53, 47, 0.16);
 }
 
 .notion-bookmark:hover {
-    border-color: var(--color-border-hover);
+    background-color: rgba(55, 53, 47, 0.06);
     transform: translateY(-1px);
 }
 
@@ -440,13 +439,14 @@ h1 {
     display: flex;
     text-decoration: none;
     color: inherit;
-    padding: 16px;
     gap: 16px;
 }
 
 .notion-bookmark-content {
-    flex: 1;
-    min-width: 0;
+    flex: 4 1 180px;
+    padding: 12px 14px 14px;
+    overflow: hidden;
+    text-align: left;
 }
 
 .notion-bookmark-title {
@@ -460,7 +460,7 @@ h1 {
 
 .notion-bookmark-description {
     font-size: 12px;
-    color: var(--color-text-secondary);
+    color: rgba(55, 53, 47, 0.65);
     line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -472,9 +472,10 @@ h1 {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-top: 12px;
+    margin-top: 6px;
     font-size: 12px;
     color: var(--color-text-secondary);
+    white-space: nowrap;
 }
 
 .notion-bookmark-favicon {
@@ -484,14 +485,85 @@ h1 {
 }
 
 .notion-bookmark-image {
-    flex: 0 0 120px;
-    height: 80px;
-    border-radius: 4px;
-    overflow: hidden;
+    flex: 1 1 180px;
+    display: block;
+    position: relative;
 }
 
 .notion-bookmark-image img {
+    display: block;
+    object-fit: cover;
+    border-radius: 2px;
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    position: absolute;
+    inset: 0px;
+}
+
+/* Todo block styles */
+.notion-todo {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    transition: background-color 0.1s ease;
+}
+
+.notion-todo:hover {
+    background-color: var(--color-bg-default-hover);
+}
+
+.notion-todo-checkbox {
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgb(55, 53, 47);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.1s ease;
+    margin-top: 2px;
+}
+
+.notion-todo.checked .notion-todo-checkbox {
+    background-color: rgb(35, 131, 226);
+    border-color: rgba(55, 53, 47, .00);
+}
+
+.checkmark {
+    width: 12px;
+    height: 12px;
+    color: white;
+}
+
+.notion-todo-text {
+    flex: 1;
+    line-height: 1.5;
+}
+
+.notion-todo.checked .notion-todo-text {
+    text-decoration: line-through;
+    color: rgba(55, 53, 47, 0.65);
+}
+
+/* Color variants */
+.notion-todo-pink .notion-todo-checkbox {
+    background-color: var(--color-bg-pink);
+    border-color: var(--color-bg-pink);
+}
+
+.notion-todo-blue .notion-todo-checkbox {
+    background-color: var(--color-bg-blue);
+    border-color: var(--color-bg-blue);
+}
+
+.notion-todo-green .notion-todo-checkbox {
+    background-color: var(--color-bg-green);
+    border-color: var(--color-bg-green);
+}
+
+/* Add other color variants as needed */
+
+.block[style*="background-color"] {
+    /* padding: 10px;
+    border-radius: 4px; */
 }
