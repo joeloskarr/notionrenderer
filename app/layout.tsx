@@ -31,6 +31,7 @@ export default function RootLayout({
       </head>
       <body>
         <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/prism.min.js"></script>
+        <script src="https://kit.fontawesome.com/7594385887.js"></script>
 
         {children}
       </body>

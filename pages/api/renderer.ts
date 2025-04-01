@@ -15,6 +15,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   //const blocks = exampleBlocks;
   const blocks = await response.json();
 
+  const metaBlock = blocks[0]?.master;
+  const isDatabaseRow = metaBlock?.parent?.type === 'database_id';
+  const isDatabase = metaBlock?.object === 'database';
+
   // Function to escape HTML special characters
   function escapeHTML(str: string): string {
     return str
@@ -64,6 +68,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }).join("");
   }
 
+  function getOrderedProps(database: any, rows: any): string[] {
+    // Search for the "notionrooms" column
+
+    const notionRoomsColumn = Object.entries(database.properties).find(([key, prop]: [string, any]) =>
+      prop.name.toLowerCase() === "notionrooms"
+    );
+
+    if (notionRoomsColumn) {
+      const [_, column] = notionRoomsColumn as [string, { id: string }];
+
+      // Look through all cells in the "notionrooms" column
+      for (const row of rows || []) {
+
+        const cellValue = row.properties["notionrooms"]?.rich_text?.[0]?.plain_text || '';
+
+        const match = cellValue.match(/\[Order:\s*(.*?)\]/);
+
+        if (match) {
+          return match[1].split(',').map((prop: string) => prop.trim()); // Trim whitespace
+        }
+      }
+    }
+
+    // Fallback to default order if no match is found
+    return Object.keys(database.properties);
+  }
+
+
+  function getOptionStyle(color: string) {
+    const colorMap: Record<string, string> = {
+      'default': 'var(--color-text-default)',
+      'gray': 'var(--color-text-gray)',
+      'brown': 'var(--color-text-brown)',
+      'orange': 'var(--color-text-orange)',
+      'yellow': 'var(--color-text-yellow)',
+      'green': 'var(--color-text-green)',
+      'blue': 'var(--color-text-blue)',
+      'purple': 'var(--color-text-purple)',
+      'pink': 'var(--color-text-pink)',
+      'red': 'var(--color-text-red)'
+    };
+    return `color: ${colorMap[color]}; background-color: var(--color-bg-${color})`;
+  }
+
 
   function renderBlock(block: any) {
 
@@ -71,23 +119,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (block.block) type = block.block.type
     else type = block.type;
 
-    const blockColor = block.block?.color || block.color;
-    const blockStyle = blockColor && blockColor.includes("_background")
-      ? `background-color: var(--color-bg-${blockColor.split("_")[0]});`
+    // Extract color and determine background style if applicable
+    const color = block.block[type]?.color || block[type]?.color;
+    const bgClass = color && color.includes("_background")
+      ? `color-bg-${color.split("_")[0]}`
       : "";
-
-    function mergeStyle(existingStyle: string, newStyle: string): string {
-      return existingStyle
-        ? `${existingStyle.trim().endsWith(";") ? existingStyle.trim() : existingStyle.trim() + ";"} ${newStyle}`
-        : newStyle;
-    }
 
     switch (type) {
       case 'paragraph':
-        return `<p style="${mergeStyle(block.block?.paragraph?.style || "", blockStyle)}">${parseRichTextToHTML(block.block.paragraph.rich_text)}</p>`;
+        return `<p class="${bgClass}">${parseRichTextToHTML(block.block.paragraph.rich_text)}</p>`;
       case 'child_page':
         return `
-          <div class="child-page" style="${mergeStyle("", blockStyle)}">
+          <div class="child-page ${bgClass}">
             <a href="${block.page.public_url}" target="_blank">
               <span class="emoji">${block.page.icon?.emoji || '📄'}</span> <span class="alink">${block.page.properties.title.title[0].plain_text}</span>
             </a>
@@ -95,33 +138,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       case 'heading_1':
         if (block.block.heading_1.is_toggleable) {
           return `
-            <details style="${mergeStyle("margin: 10px 0; padding: 5px; border-radius: 5px;", blockStyle)}">
+            <details class="${bgClass}">
               <summary><h2>${parseRichTextToHTML(block.block.heading_1.rich_text)}</h2></summary>
               <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
             </details>`;
         }
-        return `<h2 style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block.heading_1.rich_text)}</h2>`;
+        return `<h2 class="${bgClass}">${parseRichTextToHTML(block.block.heading_1.rich_text)}</h2>`;
       case 'heading_2':
         if (block.block.heading_2.is_toggleable) {
           return `
-            <details style="${mergeStyle("margin: 10px 0; padding: 5px; border-radius: 5px;", blockStyle)}">
+            <details class="${bgClass}">
               <summary><h3>${parseRichTextToHTML(block.block.heading_2.rich_text)}</h3></summary>
               <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
             </details>`;
         }
-        return `<h3 style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block.heading_2.rich_text)}</h3>`;
+        return `<h3 class="${bgClass}">${parseRichTextToHTML(block.block.heading_2.rich_text)}</h3>`;
       case 'heading_3':
         if (block.block.heading_3.is_toggleable) {
           return `
-            <details style="${mergeStyle("margin: 10px 0; padding: 5px; border-radius: 5px;", blockStyle)}">
+            <details>
               <summary><h4>${parseRichTextToHTML(block.block.heading_3.rich_text)}</h4></summary>
               <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
             </details>`;
         }
-        return `<h4 style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block.heading_3.rich_text)}</h4>`;
+        return `<h4 class="${bgClass}">${parseRichTextToHTML(block.block.heading_3.rich_text)}</h4>`;
       case 'toggle':
         return `
-          <details style="margin: 10px 0; padding: 5px; border-radius: 5px;">
+          <details class="${bgClass}">
             <summary>${parseRichTextToHTML(block.block.toggle.rich_text)}</summary>
             <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
           </details>`;
@@ -136,41 +179,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? `background-color:${calloutCssVariable};`
           : `color:${calloutCssVariable};`;
         return `
-          <div class="callout" style="${mergeStyle(calloutStyle, blockStyle)}">
+          <div class="callout ${bgClass}" style="${calloutStyle}">
             <span class="callout-icon">${block.block.callout.icon.emoji}</span>
             ${parseRichTextToHTML(block.block.callout.rich_text)}
           </div>`;
       case 'column_list':
         return `
           <div class="column-list">
-            ${block.block.block.children
+            ${block.block.children
             .map((column: any, index: number, array: any[]) => `
                 ${renderBlock({ block: column })}
                 ${index < array.length ? '<div class="column-divider"></div>' : ''}
               `).join('')}
           </div>`;
       case 'column':
+        let dividerAdj = (46 * (block.block.columns - 1)) / (block.block.columns) + "px";
         return `
-          <div class="column">
-            ${(block.block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}
+          <div class="column" style="width: calc(100% / ${block.block.columns} - ${dividerAdj});">
+            ${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}
           </div>`;
       case 'image':
-        const imageUrl = block.block.image.file.url;
+        let imageUrl;
+
+        if (block.block.image.type === 'external')
+          imageUrl = block.block.image.external.url;
+        else
+          imageUrl = block.block.image.file.url;
+
         const caption = block.block.image.caption.map((textObj: any) => textObj.plain_text).join(' ');
         return `
-          <div class="image-block" style="${mergeStyle("", blockStyle)}">
+          <div class="image-block">
             <img src="${imageUrl}" alt="${caption}" />
-            ${caption ? `<div class="image-caption">${caption}</div>` : ''}
+            ${caption ? `<div class="image-caption">${parseRichTextToHTML(block.block.image.caption)}</div>` : ''}
           </div>`;
       case 'quote':
         return `
-          <blockquote style="${mergeStyle(`border-left: 4px solid var(--color-text-${block.block.quote.color || 'default'}); padding-left: 10px; margin: 10px 0;`, blockStyle)}">
+          <blockquote style="border-left: 4px solid var(--color-text-${block.block.quote.color || 'default'}); padding-left: 10px; margin: 10px 0;">
             ${parseRichTextToHTML(block.block.quote.rich_text)}
           </blockquote>`;
       case 'bulleted_list_item':
-        return `<li style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block.bulleted_list_item.rich_text)}</li>`;
+        return `<li>${parseRichTextToHTML(block.block.bulleted_list_item.rich_text)}</li>`;
       case 'numbered_list_item':
-        return `<li style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block.numbered_list_item.rich_text)}</li>`;
+        return `<li>${parseRichTextToHTML(block.block.numbered_list_item.rich_text)}</li>`;
       case 'code':
         const Prism = require('prismjs');
         const loadLanguages = require('prismjs/components/');
@@ -179,7 +229,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         loadLanguages([codeLanguage]);
         const highlightedCode = Prism.highlight(escapeHTML(codeContent), Prism.languages[codeLanguage], codeLanguage);
         return `
-          <div class="code-block-container" style="${mergeStyle("", blockStyle)}">
+          <div class="code-block-container">
             <div class="code-block-header">
               <span class="code-language">${codeLanguage}</span>
               <button class="copy-button" onclick="navigator.clipboard.writeText(\`${escapeHTML(codeContent)}\`)">Copy</button>
@@ -228,7 +278,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           <div class="notion-todo${colorClass}${isChecked ? ' checked' : ''}">
             <div class="notion-todo-checkbox">
               ${isChecked ? `
-                <svg viewBox="0  0 14 14" class="checkmark">
+                <svg viewBox="0 0 14 14" class="checkmark">
                   <path d="M5.5 12L14 3.5 12.5 2l-7 7-4-4.003L0 6.499z" fill="currentColor"/>
                 </svg>
               ` : ''}
@@ -239,17 +289,286 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           </div>
         `;
       }
+      case 'child_database':
+        if (block.block.database.is_inline) {
+          return renderDatabase(block.block.database, block.block.rows);
+        } else {
+          return `
+        <div class="child-page">
+          <a href="${block.block.database.public_url}" target="_blank">
+            <span class="emoji">${block.block.database.icon?.emoji || '📄'}</span> <span class="alink">${block.block.database.title[0].plain_text}</span>
+          </a>
+        </div>`;
+        }
+      case 'database_row': {
+        const database = block.block.database;
+        const rows = [block.block.properties];
+
+        return `
+            <div class="notion-database">
+              <div class="notion-database-table-wrapper">
+                <table class="notion-database-table">
+                  <tbody>
+                    ${Object.keys(database.properties).map(propName => {
+          const prop = database.properties[propName];
+          const propValue = rows[0][propName];
+          const renderedValue = renderPropertyValue(propValue, prop);
+
+          return `
+                        <tr>
+                          <td class="property-label database-row">
+                            <div class="column-name">
+                              <i class="fa-solid ${getFontAwesomeIcon(prop.type)} column-icon"></i>
+                              ${propName}
+                            </div>
+                          </td>
+                          <td class="property-value database-row">
+                            ${renderedValue}
+                          </td>
+                        </tr>
+                      `;
+        }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+      }
 
       default:
-        return `<div style="${mergeStyle("", blockStyle)}">${parseRichTextToHTML(block.block?.rich_text || [])}</div>`;
+        return '';
     }
   }
 
+
+  // Add new renderDatabase function
+  function renderDatabase(database: any, rows: any[] = []) {
+    // Get the ordered properties, excluding "hidden text"
+    let orderedProps = getOrderedProps(database, rows);
+
+    // Navigation panel HTML
+    const navigationPanel = `
+    <div class="notion-database-navigation">
+    <span class="notion-database-view active"><i class="fa-solid fa-table"></i>&nbsp;Default Table View</span>
+    <span class="notion-database-view"><i class="fa-solid fa-list"></i>&nbsp;<s>List</s></span>
+    <span class="notion-database-view"><i class="fa-solid fa-th"></i>&nbsp;<s>Gallery</s></span>
+    <span class="notion-database-view"><i class="fa-solid fa-columns"></i>&nbsp;<s>Board</s></span>
+    <span class="notion-database-view"><i class="fa-solid fa-calendar-alt"></i>&nbsp;<s>Calendar</s></span>
+    <span class="notion-database-view"><i class="fa-solid fa-stream"></i>&nbsp;<s>Timeline</s></span>
+    </div>
+    `;
+
+    return `
+<div class="notion-database ${isDatabase ? ' notion-database-database-page' : ''}">
+  ${navigationPanel}
+  ${isDatabase ? '' : `
+    <div class="notion-database-header">
+      <h3>${parseRichTextToHTML(database.title)}</h3>
+      ${database.description?.length > 0 ? `
+        <div class="notion-database-description">
+          ${parseRichTextToHTML(database.description)}
+        </div>
+      ` : ''}
+    </div>
+  `}
+  <div class="notion-database-table-wrapper">
+    <table class="notion-database-table">
+      <thead>
+        <tr>
+          ${orderedProps.map(propName => {
+      const prop = database.properties[propName.replace("-Sel", "-sel")];
+      return `
+              <th data-type="${prop.type}" class="column-name">
+                <i class="fa-solid ${getFontAwesomeIcon(prop.type.toLowerCase())}"></i> ${prop.name}
+              </th>
+            `;
+    }).join('')}
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(row => `
+          <tr>
+            ${orderedProps.map(propName => {
+      const propValue = row.properties[propName.replace("-Sel", "-sel")];
+      const renderedValue = renderPropertyValue(propValue, database.properties[propName.replace("-Sel", "-sel")]);
+      return `
+                <td>
+                  ${database.properties[propName]?.type === 'title' ? `
+                  ${row.icon ? (row.icon.startsWith('http') ? `<img src="${row.icon}" alt="icon" class="row-icon" />` : `${row.icon}`) : '<i class="fa-solid fa-file"></i>'}
+                  <a href="${row.public_url}">
+                    ${renderedValue}
+                  </a>` : renderedValue}
+                </td>`;
+    }).join('')}
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+</div>
+`;
+  }
+
+
+  function renderPropertyValue(property: any, schema: any) {
+    if (!property) return '';
+
+    switch (schema.type) {
+      case 'title':
+        return parseRichTextToHTML(property.title);
+
+      case 'rich_text':
+        return parseRichTextToHTML(property.rich_text);
+
+      case 'number':
+        return property.number?.toString() || '';
+
+      case 'select':
+        return property.select ? `
+          <span class="option-pill" style="${getOptionStyle(property.select.color)}">
+            ${property.select.name}
+          </span>
+        ` : '';
+
+      case 'multi_select':
+        return property.multi_select.map((option: any) => `
+          <span class="option-pill" style="${getOptionStyle(option.color)}">
+            ${option.name}
+          </span>
+        `).join('');
+
+      case 'created_time':
+        return `
+          <div class="date-cell">
+            ${new Date(property.created_time).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+          </div>
+        `;
+      case 'date':
+        return property.date?.start ? `
+          <div class="date-cell">
+            ${new Date(property.date.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            ${property.date.end ? ` → ${new Date(property.date.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}` : ''}
+          </div>
+        ` : '';
+
+      case 'checkbox':
+        return `
+          <div class="checkbox-cell ${property.checkbox ? 'checked' : ''}">
+            <svg viewBox="0 0 14 14">
+              <path d="M5.5 12L14 3.5 12.5 2l-7 7-4-4.003L0 6.499z" fill="currentColor"/>
+            </svg>
+          </div>
+        `;
+
+      case 'url':
+        return property.url ? `
+          <a href="${property.url}" target="_blank" class="url-cell">
+            ${new URL(property.url).hostname}
+          </a>
+        ` : '';
+
+      case 'email':
+        return property.email ? `
+          <a href="mailto:${property.email}" class="email-cell">
+            ${property.email}
+          </a>
+        ` : '';
+
+      case 'phone_number':
+        return property.phone_number ? `
+          <a href="tel:${property.phone_number}" class="phone-cell">
+            ${property.phone_number}
+          </a>
+        ` : '';
+
+      case 'files':
+        return property.files.map((file: any) => {
+          return `
+            <div class="file-cell">
+              ${file.isImage ? `
+                <img src="${file.file?.url || file.external?.url}" alt="${file.name}" />
+              ` : `
+                <a href="${file.file?.url}" target="_blank">${file.name}</a>
+              `}
+            </div>
+          `;
+        }).join('');
+
+      case 'people':
+        return property.people.map((person: any) => {
+          return `
+            <div class="person-cell">
+              ${person.object === 'user' ? (person.data?.status ? 'N/A' : person.data) : 'N/A'}
+            </div>
+          `;
+        }).join('');
+
+      default:
+        return '';
+    }
+  }
+
+  // Function to map property names to Font Awesome icons
+  function getFontAwesomeIcon(propName: string): string {
+
+    if (propName === "multi-select") propName = "multi_select";
+
+    const iconMap: Record<string, string> = {
+      "checkbox": "fa-check-square",
+      "created_time": "fa-clock",
+      "created": "fa-clock",
+      "date": "fa-calendar-alt",
+      "datetime": "fa-calendar-alt",
+      "email": "fa-envelope",
+      "files": "fa-file",
+      "formula": "fa-calculator",
+      "last_edited_by": "fa-user-edit",
+      "last_edited_time": "fa-history",
+      "multi_select": "fa-list-ul",
+      "number": "fa-hashtag",
+      "person": "fa-person",
+      "people": "fa-person",
+      "phone_number": "fa-phone",
+      "relation": "fa-link",
+      "name": "fa-align-left",
+      "text": "fa-align-left",
+      "rich_text": "fa-align-left",
+      "rollup": "fa-layer-group",
+      "select": "fa-check-circle",
+      "status": "fa-tasks",
+      "title": "fa-font",
+      "url": "fa-link"
+    };
+    return iconMap[propName.toLowerCase()] || "fa-question-circle"; // Default icon
+  }
+
   function renderHeader() {
-    let html1 = "<div class='layout-content'>";
-    if (blocks[0].master.icon?.emoji) html1 += `<div class='notion-header-icon'>${blocks[0].master.icon.emoji}</div>`;
-    html1 += `<div class='notion-header-title'><h1>${blocks[0].master.properties.title.title[0].plain_text}</h1></div>`;
-    html1 += '</div>'
+    let title = "";
+
+    if (isDatabase) { // Means it's a database
+      title = metaBlock.title[0]?.plain_text || ""; // Extract plain_text from the title property
+    } else if (isDatabaseRow) { // Means it's a row in the database
+      const titleProperty = Object.entries(metaBlock.properties).find(([key, prop]: [string, any]) => prop.id === "title");
+      if (titleProperty) {
+        const titleProp = titleProperty[1] as { title: { plain_text: string }[] };
+        title = titleProp.title[0]?.plain_text || ""; // Extract plain_text from the title property
+      }
+    } else { // Normal page
+      title = metaBlock.properties?.title?.title[0]?.plain_text; // If normal page
+    }
+
+    let html1 = "";
+
+    // Render cover image if available
+    if (metaBlock.cover) {
+      const coverUrl = metaBlock.cover.type === "external" ? metaBlock.cover.external.url : metaBlock.cover.file.url;
+      html1 += `<div class='notion-header-cover'><img src="${coverUrl}" alt="Cover Image" /></div>`;
+    }
+
+    html1 += "<div class='layout-content' style='position: relative; z-index: 2;'>";
+    if (metaBlock.icon?.emoji) html1 += `<div class='notion-header-icon'>${metaBlock.icon.emoji}</div>`;
+    html1 += `<div class='notion-header-title'><h1>${title}</h1></div>`;
+    html1 += '</div>';
     return html1;
   }
 
@@ -302,7 +621,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   function renderContent() {
-    let html = '<div class="layout-full">';
+    let html = '<div class="layout-full' + (isDatabase ? ' database-page' : '') + '">';
 
     html += renderHeader();
 
