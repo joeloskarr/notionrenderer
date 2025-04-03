@@ -33,6 +33,7 @@ export default function RootLayout({
         <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/prism.min.js"></script>
         <script src="https://kit.fontawesome.com/7594385887.js"></script>
 
+        <script src="/notion-renderer.js"></script>
         {children}
       </body>
     </html>

@@ -36,6 +36,14 @@
 
 }
 
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    /* Ensure parents have full height */
+}
+
 .color-text-default {
     color: var(--color-text-default);
 }
@@ -193,6 +201,14 @@ a {}
     padding: 0px;
 }
 
+.block:has(.file-block):hover {
+    background-color: rgba(55, 53, 47, 0.08);
+}
+
+.block:has(.equation-block):hover {
+    background-color: rgba(55, 53, 47, 0.08);
+}
+
 .notion-page-content {
     padding: 8px 0px 0px;
 }
@@ -206,6 +222,14 @@ a {}
 .notion-header-icon {
     font-size: 78px;
     line-height: normal;
+}
+
+.notion-header-icon img {
+    display: block;
+    object-fit: cover;
+    border-radius: 4px;
+    width: 124.32px;
+    height: 124.32px;
 }
 
 h2 {
@@ -388,6 +412,10 @@ b {
 .callout {
     padding: 16px !important;
     border-radius: 3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* Add spacing between elements */
 }
 
 .callout-icon {
@@ -447,7 +475,7 @@ b {
 .image-caption {
     max-width: 100%;
     width: 100%;
-    white-space: pre-wrap;
+    /* white-space: pre-wrap; */
     word-break: break-word;
     caret-color: rgb(55, 53, 47);
     font-size: 14px;
@@ -916,7 +944,7 @@ div.notion-database-database-page>.notion-database-navigation {
     display: inline;
     border-bottom: 1px solid #d1d1d1;
     margin-right: 5px;
-    opacity: 1;
+    opacity: 0.7;
 }
 
 .notion-database-table td {
@@ -928,6 +956,10 @@ div.notion-database-database-page>.notion-database-navigation {
 .notion-database-table td:first-of-type {
     font-weight: 500;
     border-left: none;
+}
+
+.notion-database-table td:first-of-type a {
+    opacity: 1.0;
 }
 
 .notion-database-table td:last-of-type {
@@ -945,6 +977,10 @@ div.notion-database-database-page>.notion-database-navigation {
 .notion-database-table .database-row {
     border: 0px;
     padding: 5px 0px;
+}
+
+.notion-database-table td.database-row>a {
+    opacity: 1.0;
 }
 
 .column-name {
@@ -1053,4 +1089,146 @@ div.notion-database-database-page>.notion-database-navigation {
     font-weight: 500;
     max-width: 220px;
     border-bottom: 2px solid black;
+}
+
+.breadcrumb-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: var(--color-bg-default);
+    padding: 10px 20px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.breadcrumb-item {
+    color: var(--color-text-default);
+    text-decoration: none;
+}
+
+.breadcrumb-item img {
+    display: block;
+    object-fit: cover;
+    border-radius: 4px;
+    width: 17.76px;
+    height: 17.76px;
+}
+
+.breadcrumb-item:not(.current):hover {
+    background-color: var(--color-bg-gray);
+}
+
+.breadcrumb-item a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb-item.current {
+    cursor: default;
+}
+
+.breadcrumb-separator {
+    color: var(--color-text-gray);
+}
+
+.breadcrumb-icon-and-name {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    /* Add spacing between the icon and the name */
+}
+
+.breadcrumb-icon {
+    width: 17.76px;
+    height: 17.76px;
+    border-radius: 4px;
+    object-fit: cover;
+}
+
+.breadcrumb-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+.video-block {}
+
+.video-block iframe {
+    width: 100%;
+    height: 100vh;
+    display: block;
+    /* Fix inline element spacing */
+    border: 0;
+    overflow-y: auto;
+    /* Keep content scrollable */
+    -ms-overflow-style: none;
+    /* Hide scrollbar in IE and Edge */
+    scrollbar-width: none;
+    /* Hide scrollbar in Firefox */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.video-block iframe html {
+    overflow-y: hidden;
+}
+
+.embed2 {
+    margin: 0 auto;
+    overflow-y: auto;
+    /* Keep content scrollable */
+    -ms-overflow-style: none;
+    /* Hide scrollbar in IE and Edge */
+    scrollbar-width: none;
+    /* Hide scrollbar in Firefox */
+}
+
+/* General styles for hiding scrollbars */
+.no-scrollbar {
+    overflow-y: auto;
+    /* Keep content scrollable */
+    -ms-overflow-style: none;
+    /* Hide scrollbar in IE and Edge */
+    scrollbar-width: none;
+    /* Hide scrollbar in Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+    /* Hide scrollbar in Chrome, Safari, and Opera */
+}
+
+.audio-block audio {
+    width: 100%;
+}
+
+.file-block a {
+    display: block;
+}
+
+
+.MJX-TEX {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    white-space: normal !important;
+    max-width: 100%;
+    width: 100%;
+}
+
+.link-preview-domain {
+    font-weight: 400;
+    color: rgba(55, 53, 47, 0.65) !important;
+    line-height: 120%;
+    min-width: 0px;
+    font-size: 14px;
+    white-space: nowrap;
+    width: auto;
+}
+
+.link-preview-title {
+    font-weight: 600;
 }

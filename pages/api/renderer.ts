@@ -1,7 +1,19 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { renderPDFBlock } from './renderer/pdf';
+import { renderVideoBlock } from './renderer/video';
+import { escapeHTML, parseRichTextToHTML, getOptionStyle } from './renderer/utils';
+import { renderHeading1, renderHeading2, renderHeading3 } from './renderer/headings';
+import { renderCodeBlock } from './renderer/code';
+import { renderCallout, renderToggle, renderQuote } from './renderer/misc';
+import { renderColumnList, renderColumn } from './renderer/columns';
+import { renderImage } from './renderer/image';
+import { renderBookmark } from './renderer/bookmark';
+import { renderToDo } from './renderer/todo';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const response = await fetch('http://localhost:3000/api/get', {
+  const { id } = req.query; // Extract 'id' from the query parameters
+
+  const response = await fetch(`http://localhost:3000/api/get?id=${id}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -19,55 +31,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const isDatabaseRow = metaBlock?.parent?.type === 'database_id';
   const isDatabase = metaBlock?.object === 'database';
 
-  // Function to escape HTML special characters
-  function escapeHTML(str: string): string {
-    return str
-      .replace(/&/g, "\&")
-      .replace(/</g, "\<")
-      .replace(/>/g, "\>")
-      .replace(/"/g, '\"')
-      .replace(/'/g, "\'");
-  }
-
-  // Function to parse rich text annotations and generate HTML
-  function parseRichTextToHTML(richText: any[]): string {
-    return richText.map((textObj) => {
-      let content;
-      if (textObj.text) {
-        content = textObj.text.content;
-      } else
-        content = textObj.plain_text; // Fallback to plain_text if content is not available
-      const { bold, italic, strikethrough, underline, code, color } = textObj.annotations;
-
-      let html = escapeHTML(content); // Escape HTML special characters
-
-      // Apply annotations
-      if (bold) html = `<b>${html}</b>`;
-      if (italic) html = `<i>${html}</i>`;
-      if (strikethrough) html = `<s>${html}</s>`;
-      if (underline) html = `<u>${html}</u>`;
-      if (code) html = `<code>${html}</code>`;
-
-      // Apply color styling using CSS variables
-      if (color && color !== "default") {
-        const cssVariable = color.includes("_background")
-          ? `var(--color-bg-${color.split("_")[0]})`
-          : `var(--color-text-${color})`;
-        const style = color.includes("_background")
-          ? `background-color:${cssVariable};`
-          : `color:${cssVariable};`;
-        html = `<span style="${style}">${html}</span>`;
-      }
-
-      // Handle links
-      if (textObj.text?.link || textObj.href) {
-        html = `<a href="${textObj.text?.link?.url || textObj.href}">${html}</a>`;
-      }
-
-      return html;
-    }).join("");
-  }
-
   function getOrderedProps(database: any, rows: any): string[] {
     // Search for the "notionrooms" column
 
@@ -75,43 +38,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       prop.name.toLowerCase() === "notionrooms"
     );
 
+    let orderedProps: string[] = [];
+
     if (notionRoomsColumn) {
       const [_, column] = notionRoomsColumn as [string, { id: string }];
 
       // Look through all cells in the "notionrooms" column
       for (const row of rows || []) {
-
         const cellValue = row.properties["notionrooms"]?.rich_text?.[0]?.plain_text || '';
-
         const match = cellValue.match(/\[Order:\s*(.*?)\]/);
 
         if (match) {
-          return match[1].split(',').map((prop: string) => prop.trim()); // Trim whitespace
+          orderedProps = match[1].split(',').map((prop: string) => prop.trim()); // Trim whitespace
+          break;
         }
       }
     }
 
     // Fallback to default order if no match is found
-    return Object.keys(database.properties);
+    if (orderedProps.length === 0) {
+      orderedProps = Object.keys(database.properties);
+    }
+
+    // Ensure "title" is always the first property
+    const titleIndex = orderedProps.findIndex((prop) => database.properties[prop]?.id === "title");
+    if (titleIndex > -1) {
+      const [titleProp] = orderedProps.splice(titleIndex, 1);
+      orderedProps.unshift(titleProp);
+    }
+
+    return orderedProps;
   }
-
-
-  function getOptionStyle(color: string) {
-    const colorMap: Record<string, string> = {
-      'default': 'var(--color-text-default)',
-      'gray': 'var(--color-text-gray)',
-      'brown': 'var(--color-text-brown)',
-      'orange': 'var(--color-text-orange)',
-      'yellow': 'var(--color-text-yellow)',
-      'green': 'var(--color-text-green)',
-      'blue': 'var(--color-text-blue)',
-      'purple': 'var(--color-text-purple)',
-      'pink': 'var(--color-text-pink)',
-      'red': 'var(--color-text-red)'
-    };
-    return `color: ${colorMap[color]}; background-color: var(--color-bg-${color})`;
-  }
-
 
   function renderBlock(block: any) {
 
@@ -131,172 +88,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       case 'child_page':
         return `
           <div class="child-page ${bgClass}">
-            <a href="${block.page.public_url}" target="_blank">
-              <span class="emoji">${block.page.icon?.emoji || '📄'}</span> <span class="alink">${block.page.properties.title.title[0].plain_text}</span>
+            <a href="${block.block.page.service_url}" target="_blank">
+              <span class="emoji">${block.block.page.icon?.emoji || '📄'}</span> <span class="alink">${block.block.page.properties.title.title[0].plain_text}</span>
             </a>
           </div>`;
       case 'heading_1':
-        if (block.block.heading_1.is_toggleable) {
-          return `
-            <details class="${bgClass}">
-              <summary><h2>${parseRichTextToHTML(block.block.heading_1.rich_text)}</h2></summary>
-              <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
-            </details>`;
-        }
-        return `<h2 class="${bgClass}">${parseRichTextToHTML(block.block.heading_1.rich_text)}</h2>`;
+        return renderHeading1(block, bgClass, renderBlock);
+
       case 'heading_2':
-        if (block.block.heading_2.is_toggleable) {
-          return `
-            <details class="${bgClass}">
-              <summary><h3>${parseRichTextToHTML(block.block.heading_2.rich_text)}</h3></summary>
-              <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
-            </details>`;
-        }
-        return `<h3 class="${bgClass}">${parseRichTextToHTML(block.block.heading_2.rich_text)}</h3>`;
+        return renderHeading2(block, bgClass, renderBlock);
+
       case 'heading_3':
-        if (block.block.heading_3.is_toggleable) {
-          return `
-            <details>
-              <summary><h4>${parseRichTextToHTML(block.block.heading_3.rich_text)}</h4></summary>
-              <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
-            </details>`;
-        }
-        return `<h4 class="${bgClass}">${parseRichTextToHTML(block.block.heading_3.rich_text)}</h4>`;
+        return renderHeading3(block, bgClass, renderBlock);
+
       case 'toggle':
-        return `
-          <details class="${bgClass}">
-            <summary>${parseRichTextToHTML(block.block.toggle.rich_text)}</summary>
-            <div class='toggle-children'>${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}</div>
-          </details>`;
+        return renderToggle(block, bgClass, renderBlock);
       case 'divider':
         return `<div class="divider" />`;
       case 'callout':
-        const calloutColor = block.block.callout.color;
-        const calloutCssVariable = calloutColor.includes("_background")
-          ? `var(--color-bg-${calloutColor.split("_")[0]})`
-          : `var(--color-text-${calloutColor})`;
-        const calloutStyle = calloutColor.includes("_background")
-          ? `background-color:${calloutCssVariable};`
-          : `color:${calloutCssVariable};`;
-        return `
-          <div class="callout ${bgClass}" style="${calloutStyle}">
-            <span class="callout-icon">${block.block.callout.icon.emoji}</span>
-            ${parseRichTextToHTML(block.block.callout.rich_text)}
-          </div>`;
+        return renderCallout(block, bgClass, renderBlock);
       case 'column_list':
-        return `
-          <div class="column-list">
-            ${block.block.children
-            .map((column: any, index: number, array: any[]) => `
-                ${renderBlock({ block: column })}
-                ${index < array.length ? '<div class="column-divider"></div>' : ''}
-              `).join('')}
-          </div>`;
+        return renderColumnList(block, renderBlock);
       case 'column':
-        let dividerAdj = (46 * (block.block.columns - 1)) / (block.block.columns) + "px";
-        return `
-          <div class="column" style="width: calc(100% / ${block.block.columns} - ${dividerAdj});">
-            ${(block.block.children || []).map((child: any) => renderBlock({ block: child })).join('')}
-          </div>`;
+        return renderColumn(block, renderBlock);
       case 'image':
-        let imageUrl;
-
-        if (block.block.image.type === 'external')
-          imageUrl = block.block.image.external.url;
-        else
-          imageUrl = block.block.image.file.url;
-
-        const caption = block.block.image.caption.map((textObj: any) => textObj.plain_text).join(' ');
-        return `
-          <div class="image-block">
-            <img src="${imageUrl}" alt="${caption}" />
-            ${caption ? `<div class="image-caption">${parseRichTextToHTML(block.block.image.caption)}</div>` : ''}
-          </div>`;
+        return renderImage(block);
       case 'quote':
-        return `
-          <blockquote style="border-left: 4px solid var(--color-text-${block.block.quote.color || 'default'}); padding-left: 10px; margin: 10px 0;">
-            ${parseRichTextToHTML(block.block.quote.rich_text)}
-          </blockquote>`;
+        return renderQuote(block);
       case 'bulleted_list_item':
         return `<li>${parseRichTextToHTML(block.block.bulleted_list_item.rich_text)}</li>`;
       case 'numbered_list_item':
         return `<li>${parseRichTextToHTML(block.block.numbered_list_item.rich_text)}</li>`;
       case 'code':
-        const Prism = require('prismjs');
-        const loadLanguages = require('prismjs/components/');
-        const codeContent = block.block.code.rich_text.map((textObj: any) => textObj.plain_text).join('');
-        const codeLanguage = block.block.code.language || 'plaintext';
-        loadLanguages([codeLanguage]);
-        const highlightedCode = Prism.highlight(escapeHTML(codeContent), Prism.languages[codeLanguage], codeLanguage);
-        return `
-          <div class="code-block-container">
-            <div class="code-block-header">
-              <span class="code-language">${codeLanguage}</span>
-              <button class="copy-button" onclick="navigator.clipboard.writeText(\`${escapeHTML(codeContent)}\`)">Copy</button>
-            </div>
-            <pre class="code-block" style="overflow-x: auto; white-space: pre;"><code class="language-${codeLanguage}">${highlightedCode}</code></pre>
-          </div>`;
+        return renderCodeBlock(block);
       case 'table_of_contents':
         return renderTableOfContents(blocks); // Render the table of contents
-      case 'bookmark': {
-        const { url, metadata } = block.block.bookmark;
-        const hostname = new URL(url).hostname.replace('www.', '');
-
-        return `
-        <div class="notion-bookmark">
-          <a href="${url}" target="_blank" class="notion-bookmark-link">
-            <div class="notion-bookmark-content">
-              <div class="notion-bookmark-text">
-                <div class="notion-bookmark-title">
-                  ${metadata.title}
-                </div>
-                ${metadata.description ? `
-                <div class="notion-bookmark-description">
-                  ${metadata.description}
-                </div>` : ''}
-              </div>
-              <div class="notion-bookmark-href">
-                <img src="${metadata.favicon}" 
-                     class="notion-bookmark-favicon" />
-                <span>${url}</span>
-              </div>
-            </div>
-            ${metadata.image ? `
-            <div class="notion-bookmark-image">
-              <img src="${metadata.image}" alt="${metadata.description || ''}" />
-            </div>` : ''}
-          </a>
-        </div>
-      `;
-      }
-      case 'to_do': {
-        const todo = block.block.to_do;
-        const isChecked = todo.checked;
-        const colorClass = todo.color !== 'default' ? ` notion-todo-${todo.color}` : '';
-
-        return `
-          <div class="notion-todo${colorClass}${isChecked ? ' checked' : ''}">
-            <div class="notion-todo-checkbox">
-              ${isChecked ? `
-                <svg viewBox="0 0 14 14" class="checkmark">
-                  <path d="M5.5 12L14 3.5 12.5 2l-7 7-4-4.003L0 6.499z" fill="currentColor"/>
-                </svg>
-              ` : ''}
-            </div>
-            <div class="notion-todo-text">
-              ${parseRichTextToHTML(todo.rich_text)}
-            </div>
-          </div>
-        `;
-      }
+      case 'bookmark':
+        return renderBookmark(block);
+      case 'to_do':
+        return renderToDo(block);
       case 'child_database':
-        if (block.block.database.is_inline) {
+        if (block.block.database?.is_inline !== false || isDatabase) {
           return renderDatabase(block.block.database, block.block.rows);
         } else {
           return `
         <div class="child-page">
-          <a href="${block.block.database.public_url}" target="_blank">
-            <span class="emoji">${block.block.database.icon?.emoji || '📄'}</span> <span class="alink">${block.block.database.title[0].plain_text}</span>
+          <a href="${block.block.database.service_url}" target="_blank">
+            <span class="emoji">${block.block.database.icon?.emoji || '📄'}</span> <span class="alink">${block.block.database?.title[0]?.plain_text || "Untitled"}</span>
           </a>
         </div>`;
         }
@@ -307,34 +145,288 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return `
             <div class="notion-database">
               <div class="notion-database-table-wrapper">
-                <table class="notion-database-table">
-                  <tbody>
-                    ${Object.keys(database.properties).map(propName => {
+          <table class="notion-database-table">
+            <tbody>
+              ${Object.keys(database.properties).map(propName => {
           const prop = database.properties[propName];
+          if (prop.id === "title" || propName === 'notionrooms') return ""; //Filters
           const propValue = rows[0][propName];
-          const renderedValue = renderPropertyValue(propValue, prop);
+          const renderedValue = renderPropertyValue(propValue, prop) || '<span class="column-name">Empty</span>';
 
           return `
-                        <tr>
-                          <td class="property-label database-row">
-                            <div class="column-name">
-                              <i class="fa-solid ${getFontAwesomeIcon(prop.type)} column-icon"></i>
-                              ${propName}
-                            </div>
-                          </td>
-                          <td class="property-value database-row">
-                            ${renderedValue}
-                          </td>
-                        </tr>
-                      `;
+            <tr>
+              <td class="property-label database-row">
+                <div class="column-name">
+                  <i class="fa-solid ${getFontAwesomeIcon(prop.type)} column-icon"></i>
+                  ${propName}
+                </div>
+              </td>
+              <td class="property-value database-row">
+                ${renderedValue}
+              </td>
+            </tr>
+                `;
         }).join('')}
-                  </tbody>
-                </table>
+            </tbody>
+          </table>
               </div>
             </div>
           `;
       }
+      case 'video': {
+        return renderVideoBlock(block.block.video);
+      }
+      case 'embed': {
+        const embedUrl = block.block.embed.url;
+        const twitterRegex = /(twitter\.com|x\.com)\/.*\/status\/(\d+)/;
+        const spotifyPlaylistRegex = /https:\/\/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
+        const spotifyPodcastRegex = /https:\/\/open\.spotify\.com\/episode\/([a-zA-Z0-9]+)/;
+        const spotifyTrackRegex = /https:\/\/open\.spotify\.com\/(?:embed\/)?track\/([a-zA-Z0-9]+)/;
+        const googleMapsRegex = /https:\/\/www\.google\.com\/maps\/place\/([^/]+)/;
+        const figmaRegex = /https:\/\/www\.figma\.com\/file\/([a-zA-Z0-9]+)\/([^?]+)/;
+        const soundcloudRegex = /https:\/\/soundcloud\.com\/([a-zA-Z0-9-_]+)\/([a-zA-Z0-9-_]+)/;
+        const airtableRegex = /https:\/\/airtable\.com\/([a-zA-Z0-9]+)\/([a-zA-Z0-9]+)/;
 
+        const twitterMatch = embedUrl.match(twitterRegex);
+        const spotifyPlaylistMatch = embedUrl.match(spotifyPlaylistRegex);
+        const spotifyPodcastMatch = embedUrl.match(spotifyPodcastRegex);
+        const spotifyTrackMatch = embedUrl.match(spotifyTrackRegex);
+        const googleMapsMatch = embedUrl.match(googleMapsRegex);
+        const figmaMatch = embedUrl.match(figmaRegex);
+        const soundcloudMatch = embedUrl.match(soundcloudRegex);
+        const airtableMatch = embedUrl.match(airtableRegex);
+
+        if (twitterMatch) {
+          const tweetId = twitterMatch[2];
+          return `
+            <div class="video-block no-scrollbar">
+              <iframe id="if-${tweetId}" scrolling="no" class="no-scrollbar" src="https://platform.twitter.com/embed/Tweet.html?id=${tweetId}" >
+              </iframe>
+            </div>
+            ${block.block.embed.caption?.length ? `
+              <div class="image-caption">
+                ${parseRichTextToHTML(block.block.embed.caption)}
+              </div>
+            ` : ''}
+          `;
+        }
+
+        if (spotifyPlaylistMatch) {
+          const playlistId = spotifyPlaylistMatch[1];
+          return `
+            <div class="spotify-block">
+              <iframe 
+                src="https://open.spotify.com/embed/playlist/${playlistId}" 
+                width="100%" 
+                height="380" 
+                frameborder="0" 
+                allowtransparency="true" 
+                allow="encrypted-media">
+              </iframe>
+            </div>
+            ${block.block.embed.caption?.length ? `
+              <div class="image-caption">
+                ${parseRichTextToHTML(block.block.embed.caption)}
+              </div>
+            ` : ''}
+          `;
+        }
+
+        if (spotifyPodcastMatch) {
+          const episodeId = spotifyPodcastMatch[1];
+          return `
+            <div class="spotify-block">
+              <iframe 
+                src="https://open.spotify.com/embed/episode/${episodeId}" 
+                width="100%" 
+                height="152" 
+                frameborder="0" 
+                allowtransparency="true" 
+                allow="encrypted-media">
+              </iframe>
+            </div>
+            ${block.block.embed.caption?.length ? `
+              <div class="image-caption">
+                ${parseRichTextToHTML(block.block.embed.caption)}
+              </div>
+            ` : ''}
+          `;
+        }
+
+        if (spotifyTrackMatch) {
+          const trackId = spotifyTrackMatch[1];
+          return `
+            <div class="spotify-block">
+              <iframe 
+                src="https://open.spotify.com/embed/track/${trackId}" 
+                width="100%" 
+                height="152" 
+                frameborder="0" 
+                allowtransparency="true" 
+                allow="encrypted-media">
+              </iframe>
+            </div>
+            ${block.block.embed.caption?.length ? `
+              <div class="image-caption">
+                ${parseRichTextToHTML(block.block.embed.caption)}
+              </div>
+            ` : ''}
+          `;
+        }
+
+        if (googleMapsMatch) {
+          const place = googleMapsMatch[1];
+          return `
+            <div class="google-maps-block">
+              <iframe 
+                src="https://www.google.com/maps/embed/v1/place?key=${process.env.GOOGLE_MAPS}&q=${encodeURIComponent(place)}" 
+                width="100%" 
+                height="450" 
+                style="border:0;" 
+                allowfullscreen="" 
+                loading="lazy">
+              </iframe>
+            </div>
+            ${block.block.embed.caption?.length ? `
+              <div class="image-caption">
+                ${parseRichTextToHTML(block.block.embed.caption)}
+              </div>
+            ` : ''}
+          `;
+        }
+
+        if (figmaMatch) {
+          const fileId = figmaMatch[1];
+          const fileName = figmaMatch[2];
+          return `
+            <div class="figma-block">
+              <iframe 
+                src="https://www.figma.com/embed?embed_host=share&url=https://www.figma.com/file/${fileId}/${encodeURIComponent(fileName)}" 
+                width="100%" 
+                height="450" 
+                allowfullscreen 
+                style="border: none;">
+              </iframe>
+            </div>
+            ${block.block.embed.caption?.length ? `
+              <div class="image-caption">
+                ${parseRichTextToHTML(block.block.embed.caption)}
+              </div>
+            ` : ''}
+          `;
+        }
+
+        if (soundcloudMatch) {
+          const user = soundcloudMatch[1];
+          const track = soundcloudMatch[2];
+          return `
+            <div class="soundcloud-block">
+              <iframe 
+                width="100%" 
+                height="166" 
+                scrolling="no" 
+                frameborder="no" 
+                allow="autoplay" 
+                src="https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/${user}/${track}&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true">
+              </iframe>
+            </div>
+            ${block.block.embed.caption?.length ? `
+              <div class="image-caption">
+                ${parseRichTextToHTML(block.block.embed.caption)}
+              </div>
+            ` : ''}
+          `;
+        }
+
+        if (airtableMatch) {
+          const baseId = airtableMatch[1];
+          const tableId = airtableMatch[2];
+          return `
+            <div class="airtable-block">
+              <iframe 
+                src="https://airtable.com/embed/${baseId}/${tableId}" 
+                width="100%" 
+                height="533" 
+                frameborder="0" 
+                style="background: transparent; border: 1px solid #ccc;">
+              </iframe>
+            </div>
+            ${block.block.embed.caption?.length ? `
+              <div class="image-caption">
+                ${parseRichTextToHTML(block.block.embed.caption)}
+              </div>
+            ` : ''}
+          `;
+        }
+
+        // Fallback for unsupported embeds
+        return `
+          <div class="embed-block">
+            <iframe 
+              src="${embedUrl}" 
+              width="100%" 
+              height="450" 
+              frameborder="0" 
+              allowfullscreen 
+              style="border: none;">
+            </iframe>
+            ${block.block.embed.caption?.length ? `
+              <div class="image-caption">
+                ${parseRichTextToHTML(block.block.embed.caption)}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }
+      case 'pdf':
+        return renderPDFBlock(block.block.pdf);
+      case 'audio': {
+        const audioUrl = block.block.audio.type === 'external'
+          ? block.block.audio.external.url
+          : block.block.audio.file.url;
+
+        const caption = block.block.audio.caption.map((textObj: any) => textObj.plain_text).join(' ');
+
+        return `
+          <div class="audio-block">
+            <audio controls>
+              <source src="${audioUrl}" type="audio/mpeg">
+              Your browser does not support the audio element.
+            </audio>
+            ${caption ? `<div class="audio-caption">${parseRichTextToHTML(block.block.audio.caption)}</div>` : ''}
+          </div>
+        `;
+      }
+      case 'file': {
+        const fileData = block.block.file;
+        const fileUrl = fileData.file.url;
+        const fileName = fileData.name;
+
+        if (!fileName) {
+          return ''; // Skip rendering if the name property is missing
+        }
+
+        return `
+          <div class="file-block">
+            <a href="${fileUrl}" download="${fileName}" class="file-download-link">
+              <i class="fa-solid fa-download"></i> ${fileName}
+            </a>
+          </div>
+        `;
+      }
+      case 'synced_block': {
+        return `<p class="column-name">[Synced block are not supported]</p>`;
+      }
+      case 'equation': {
+        const expression = block.block.equation?.expression || '';
+        return `
+          <div class="equation-block">
+            <span class="math-expression">
+              \\(${expression}\\)
+            </span>
+          </div>
+        `;
+      }
       default:
         return '';
     }
@@ -350,11 +442,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const navigationPanel = `
     <div class="notion-database-navigation">
     <span class="notion-database-view active"><i class="fa-solid fa-table"></i>&nbsp;Default Table View</span>
-    <span class="notion-database-view"><i class="fa-solid fa-list"></i>&nbsp;<s>List</s></span>
-    <span class="notion-database-view"><i class="fa-solid fa-th"></i>&nbsp;<s>Gallery</s></span>
-    <span class="notion-database-view"><i class="fa-solid fa-columns"></i>&nbsp;<s>Board</s></span>
-    <span class="notion-database-view"><i class="fa-solid fa-calendar-alt"></i>&nbsp;<s>Calendar</s></span>
-    <span class="notion-database-view"><i class="fa-solid fa-stream"></i>&nbsp;<s>Timeline</s></span>
     </div>
     `;
 
@@ -363,7 +450,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ${navigationPanel}
   ${isDatabase ? '' : `
     <div class="notion-database-header">
-      <h3>${parseRichTextToHTML(database.title)}</h3>
+      <h3>${database.title.plain_text ? parseRichTextToHTML(database.title) : 'Untitled'}</h3>
       ${database.description?.length > 0 ? `
         <div class="notion-database-description">
           ${parseRichTextToHTML(database.description)}
@@ -390,12 +477,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           <tr>
             ${orderedProps.map(propName => {
       const propValue = row.properties[propName.replace("-Sel", "-sel")];
-      const renderedValue = renderPropertyValue(propValue, database.properties[propName.replace("-Sel", "-sel")]);
+      const renderedValue = renderPropertyValue(propValue, database.properties[propName.replace("-Sel", "-sel")]) || '';
       return `
                 <td>
                   ${database.properties[propName]?.type === 'title' ? `
                   ${row.icon ? (row.icon.startsWith('http') ? `<img src="${row.icon}" alt="icon" class="row-icon" />` : `${row.icon}`) : '<i class="fa-solid fa-file"></i>'}
-                  <a href="${row.public_url}">
+                  <a href="${row.service_url}">
                     ${renderedValue}
                   </a>` : renderedValue}
                 </td>`;
@@ -421,7 +508,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return parseRichTextToHTML(property.rich_text);
 
       case 'number':
-        return property.number?.toString() || '';
+        return property.number !== null && property.number !== undefined
+          ? property.number.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+          : '';
 
       case 'select':
         return property.select ? `
@@ -498,10 +587,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return property.people.map((person: any) => {
           return `
             <div class="person-cell">
-              ${person.object === 'user' ? (person.data?.status ? 'N/A' : person.data) : 'N/A'}
+              ${person.object === 'user' ? (person.data?.status ? person.data : '<span class="column-name">N/A</span>') : '<span class="column-name">N/A</span>'}
             </div>
           `;
         }).join('');
+      case 'pdf':
+        renderPDFBlock(property);
+
 
       default:
         return '';
@@ -566,7 +658,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     html1 += "<div class='layout-content' style='position: relative; z-index: 2;'>";
-    if (metaBlock.icon?.emoji) html1 += `<div class='notion-header-icon'>${metaBlock.icon.emoji}</div>`;
+    if (metaBlock.icon?.type === "file") {
+      html1 += `<div class='notion-header-icon'><img src="${metaBlock.icon.file.url}" alt="Icon" /></div>`;
+    } if (metaBlock.icon?.type === "external") {
+      html1 += `<div class='notion-header-icon'><img src="${metaBlock.icon.external.url}" alt="Icon" /></div>`;
+    }
+    else if (metaBlock.icon?.emoji) {
+      html1 += `<div class='notion-header-icon'><span>${metaBlock.icon.emoji}</span></div>`;
+    }
     html1 += `<div class='notion-header-title'><h1>${title}</h1></div>`;
     html1 += '</div>';
     return html1;
@@ -620,8 +719,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return html;
   }
 
+  function renderBreadcrumb(breadcrumb: any[]): string {
+    return `
+      <div class="breadcrumb-bar">
+        ${breadcrumb.map((item, index) => {
+      const isLast = index === breadcrumb.length - 1;
+      return isLast
+        ? `<span class="breadcrumb-item current">
+                 <span class="breadcrumb-icon-and-name">
+                   ${item.icon?.startsWith('http') ? `<img src="${item.icon}" alt="icon" class="breadcrumb-icon" />` : item.icon || ''}
+                   <span class="breadcrumb-name">${item.name}</span>
+                 </span>
+               </span>`
+        : `<a href="${item.service_url}" class="breadcrumb-item">
+                 <span class="breadcrumb-icon-and-name">
+                   ${item.icon?.startsWith('http') ? `<img src="${item.icon}" alt="icon" class="breadcrumb-icon" />` : item.icon || ''}
+                   <span class="breadcrumb-name">${item.name}</span>
+                 </span>
+               </a>`;
+    }).join('<span class="breadcrumb-separator">/</span>')}
+      </div>
+    `;
+  }
+
   function renderContent() {
     let html = '<div class="layout-full' + (isDatabase ? ' database-page' : '') + '">';
+
+    // Render breadcrumb if available
+    if (metaBlock.breadcrumb) {
+      html += renderBreadcrumb(metaBlock.breadcrumb);
+    }
 
     html += renderHeader();
 

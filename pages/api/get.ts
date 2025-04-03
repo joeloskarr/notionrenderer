@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { server } from '@/app/config';
+import { isDev, server } from '@/app/config';
 
 // Features not supported
 // -- Synced blocks (works but not implemented)
@@ -9,7 +9,64 @@ import { server } from '@/app/config';
 // -- TAble of contents - no smooth scrolling to the anchor
 // -- Mono/Serif fonts (Notion does not expose these changes through the API). 
 // -- External Object Instances
-// -- Database limitations: Notion only exposes the default table view. Order of the database (columns or rows) are not exposed either.
+// -- Embeds: Google Docs/Drive/Sheets are not supported as the API does not expose them. Workaround is to set them public and link directly as embed.
+// -- Database limitations: Notion only exposes the default table view.
+// ------ Grouped tables won't wokr. 
+// ------ Order of the database (columns or rows) are not exposed either
+// ------ The API does provide decimals properly (at all).
+
+async function processBlock(block: any, notion: any): Promise<any> {
+    generateServiceUrl(block); // Update block directly
+
+    if (block.type === 'bookmark') {
+        const url = block.bookmark.url;
+        block.bookmark.metadata = await fetchBookmarkMetadata(url); // Fetch and store metadata
+    } else if (block.type === 'child_page') {
+        const page = await notion.pages.retrieve({ page_id: block.id });
+        generateServiceUrl(page); // Update block directly
+        block.page = page;
+    } else if (block.type === 'toggle') {
+        if (block.has_children === true) {
+            block.children = await fetchChildrenRecursively(notion, block.id);
+        }
+    } else if (block.type === 'synced_block') {
+        // TODO: Works but Notion is not outputting it for some reason
+        // const syncedFromId = block.synced_block.synced_from?.block_id;
+        // if (syncedFromId && !blocks.results.some((b: any) => b.id === syncedFromId)) {
+        //     const syncedBlock = await notion.blocks.retrieve({ block_id: syncedFromId });
+        //     return { block, syncedBlock };
+        // }
+    } else if (block.type.includes("numbered_list") || block.type.includes("bulleted_list")) {
+        if (block.has_children === true) {
+            block.children = await fetchChildrenRecursively(notion, block.id);
+        }
+    } else if (block.type === 'column_list') {
+        if (block.has_children === true) {
+            block.children = await fetchChildrenRecursively(notion, block.id);
+
+            // Calculate the number of first-layer children with type "column"
+            const columnCount = block.children.filter((child: any) => child.type === 'column').length;
+
+            // Add the column count to each "column" child
+            block.children.forEach((child: any) => {
+                if (child.type === 'column') {
+                    child.columns = columnCount;
+                }
+            });
+        }
+    } else if (block.type === 'child_database') {
+        let { database, rows } = await getDatabase(block.id, notion);
+        generateServiceUrl(database);
+        block.database = database;
+        block.rows = rows; // Add rows to the block
+    } else {
+        if (block.has_children) {
+            block.children = await fetchChildrenRecursively(notion, block.id);
+        }
+    }
+
+    return block;
+}
 
 async function fetchChildrenRecursively(notion: any, blockId: string) {
     const children = [];
@@ -22,15 +79,13 @@ async function fetchChildrenRecursively(notion: any, blockId: string) {
             page_size: 100,
             start_cursor: cursor,
         });
-        children.push(...response.results);
-        hasMore = response.has_more;
-        cursor = response.next_cursor;
 
         for (const child of response.results) {
-            if (child.has_children) {
-                child.children = await fetchChildrenRecursively(notion, child.id);
-            }
+            children.push(await processBlock(child, notion));
         }
+
+        hasMore = response.has_more;
+        cursor = response.next_cursor;
     }
 
     return children;
@@ -71,112 +126,175 @@ async function isImageUrl(url: string): Promise<boolean> {
     }
 }
 
+async function generateBreadcrumb(notionPage: any, notion: any): Promise<{ name: string, icon?: string, service_url?: string }[]> {
+    const breadcrumb: { name: string, icon?: string, service_url?: string }[] = [];
+    let currentPage = notionPage;
+
+    while (currentPage.parent) {
+        const parentType = currentPage.parent.type;
+
+        if (parentType === 'page_id' || parentType === 'database_id') {
+            const parentId = (parentType === 'page_id' ? currentPage.parent.page_id : currentPage.parent.database_id);
+
+            // Fetch the parent page or database using the Notion API
+            const parentData = (parentType === 'page_id')
+                ? await notion.pages.retrieve({ page_id: parentId })
+                : await notion.databases.retrieve({ database_id: parentId });
+
+            // Add the parent page's name, icon, public_url, and service_url to the breadcrumb
+
+            let breadCrumbObject = {
+                name: parentType === 'page_id'
+                    ? parentData.properties?.title?.title?.[0]?.plain_text || 'Untitled' //Page
+                    : parentData.title[0]?.plain_text || 'Untitled', //Database
+                icon: extractIcon(parentData.icon),
+            }
+            if (breadCrumbObject.name == 'Untitled' && parentData.properties) {
+                for (const key in parentData.properties) {
+                    const property = parentData.properties[key];
+                    if (property.id === 'title' && property.title?.[0]?.plain_text) {
+                        breadCrumbObject.name = property.title[0].plain_text;
+                        break;
+                    }
+                }
+            }
+
+            breadcrumb.unshift(breadCrumbObject);
+
+
+            generateServiceUrl(parentData); // Update block directly
+            breadcrumb[0].service_url = parentData.service_url;
+
+            // Update the current page to the parent page
+            currentPage = parentData;
+
+            // Stop if the parent ID matches the current page's ID as it means we're at the top level
+            if (parentId === notionPage.id) break;
+        } else {
+            break;
+        }
+    }
+
+
+    let breadCrumbObject = {
+        name: notionPage.object === 'page'
+            ? notionPage.properties?.title?.title?.[0]?.plain_text || 'Untitled' //Page
+            : notionPage.title[0]?.plain_text || 'Untitled', //Database
+        icon: extractIcon(notionPage.icon),
+    }
+    // Add the initial notionPage as the last item in the breadcrumb
+    if (breadCrumbObject.name == 'Untitled' && notionPage.properties) {
+        for (const key in notionPage.properties) {
+            const property = notionPage.properties[key];
+            if (property.id === 'title' && property.title?.[0]?.plain_text) {
+                breadCrumbObject.name = property.title[0].plain_text;
+                break;
+            }
+        }
+    }
+
+    breadcrumb.push(breadCrumbObject);
+    generateServiceUrl(notionPage); // Update block directly
+    breadcrumb[breadcrumb.length - 1].service_url = notionPage.service_url;
+
+    return breadcrumb;
+}
+
+function generateServiceUrl(block: any): void {
+    const url = block.public_url || block.url;
+    const url2 = block[block.type]?.public_url || block[block.type]?.url
+    if (url) {
+        const idMatch = url.match(/([a-zA-Z0-9]+)$/);
+        const id = idMatch ? idMatch[1] : '';
+        block.service_url = `http://46.101.7.7:3000/?id=${id}`;
+    } else if (url2) {
+        const url2 = block[block.type]?.public_url || block[block.type]?.url
+        const idMatch = url2.match(/([a-zA-Z0-9]+)$/);
+        const id = idMatch ? idMatch[1] : '';
+        block[block.type].service_url = `http://46.101.7.7:3000/?id=${id}`;
+    }
+    else {
+        block.service_url = '';
+        return;
+    }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // Notion SDK for JavaScript
     const { Client } = require("@notionhq/client");
     const notion = new Client({ auth: process.env.NOTION_KEY });
     const results = [];
-    const masterBlockId = "1c4aaa7b9847804fa1eecd789b8387c3"; // PageID
+    const test_page_Id = "1c4aaa7b9847809995d5d0b31fc6bcd1"; // PageID
+    const masterBlockId = req.query.id as string; // BlockID
 
     let blocks;
 
+
+    // Get the page the blocks reside on
+
+    let notionPage;
+
     try {
+
+        // Get all the Notion blocks
         blocks = await notion.blocks.children.list({
             block_id: masterBlockId,
             page_size: 100,
         });
 
+        console.log(blocks);
+
         // HANDLE SOLE DATABASE
         if (blocks.results.length <= 1) {
-            let { database, rows } = await getDatabase(masterBlockId, notion);
-            let block = {
-                database: database,
-                rows: rows, // Add rows to the block
-                type: "",
-            }
-            let master = { ...database }
-            block.type = "child_database";
-            results.push({ master })
-            results.push({ block });
-            return res.status(200).json(results);
+            notionPage = await notion.pages.retrieve({ page_id: masterBlockId }); //Get the page; IF success, it's a Row-page.
         }
 
     } catch (error: any) {
         if (error.code === "validation_error") return res.status(400).json({ message: "Invalid ID", status: 400 });
-        else return res.status(400).json({ message: "Unknown Error", status: 400 });
+
+        if (error.code === "object_not_found") {
+            // HANDLE SOLE DATABASE
+            let { database, rows } = await getDatabase(masterBlockId, notion);
+            console.log(blocks);
+            let block = {
+                database: database,
+                rows: rows, // Add rows to the block
+                type: "child_database",
+            };
+            let master = { ...database };
+            master.breadcrumb = await generateBreadcrumb(database, notion);
+            results.push({ master });
+            results.push({ block });
+
+            return res.status(200).json(results);
+        }
+
+        else {
+            console.error(error);
+            return res.status(400).json({ message: "Unknown Error", status: 400 });
+        }
     }
 
+    notionPage = await notion.pages.retrieve({ page_id: masterBlockId });
 
-    const parentPage = await notion.pages.retrieve({ page_id: masterBlockId });
+    // Get the breadcrumb for the page
+    const breadcrumb = await generateBreadcrumb(notionPage, notion);
+    notionPage.breadcrumb = breadcrumb;
 
     // HANDLE SOLE SUB DATABASE PAGE
-    results.push({ master: parentPage });
-    if (parentPage.parent.type === "database_id") {
-        let block = { ...parentPage }; //Hack, to make a database resemble a "normal block"
+    results.push({ master: notionPage });
+    if (notionPage.parent.type === "database_id") {
+        let block = { ...notionPage }; //Hack, to make a database resemble a "normal block"
         block.type = "database_row"; // Change type to child_database
-        block.database = parentPage; // But the database is actually in the database property, just like it would be in a normal block
+        block.database = notionPage; // But the database is actually in the database property, just like it would be in a normal block
         results.push({ block });
     }
 
     for (const block of blocks.results) {
-        if (block.type === 'bookmark') {
-            const url = block.bookmark.url;
-            block.bookmark.metadata = await fetchBookmarkMetadata(url); // Fetch and store metadata
-            results.push({ block });
-        } else if (block.type === 'child_page') {
-            const page = await notion.pages.retrieve({ page_id: block.id });
-            results.push({ block, page });
-        } else if (block.type === 'toggle') {
-            const childrenResponse = await notion.blocks.children.list({
-                block_id: block.id,
-                page_size: 100,
-            });
-            block.children = childrenResponse.results;
-            results.push({ block });
-        } else if (block.type === 'synced_block') { //TODO: Works but Notion is not outputting it for some reason
-            // const syncedFromId = block.synced_block.synced_from?.block_id;
-            // if (syncedFromId && !blocks.results.some((b: any) => b.id === syncedFromId)) {
-            //     const syncedBlock = await notion.blocks.retrieve({ block_id: syncedFromId });
-            //     results.push({ block, syncedBlock });
-            // } else {
-            //     results.push({ block });
-            // }
-        } else if (block.type.includes("numbered_list") || block.type.includes("bulleted_list")) {
-            if (block.has_children === true) {
-                block.children = await fetchChildrenRecursively(notion, block.id);
-                results.push({ block: block });
-            } else {
-                results.push({ block });
-            }
-        } else if (block.type === 'column_list') {
-            if (block.has_children === true) {
-                block.children = await fetchChildrenRecursively(notion, block.id);
-
-                // Calculate the number of first-layer children with type "column"
-                const columnCount = block.children.filter((child: any) => child.type === 'column').length;
-
-                // Add the column count to each "column" child
-                block.children.forEach((child: any) => {
-                    if (child.type === 'column') {
-                        child.columns = columnCount;
-                    }
-                });
-                results.push({ block });
-            } else
-                results.push({ block });
-        } else if (block.type === 'child_database') {
-            let { database, rows } = await getDatabase(block.id, notion);
-            block.database = database;
-            block.rows = rows; // Add rows to the block
-            results.push({ block });
-        } else {
-            if (block.has_children) {
-                block.children = await fetchChildrenRecursively(notion, block.id);
-            }
-            results.push({ block });
-        }
+        results.push({ block: await processBlock(block, notion) });
     }
+
     return res.status(200).json(results);
 }
 
@@ -190,10 +308,13 @@ async function getDatabaseRows(id: string, notion: any): Promise<any> {
     // Query all rows of the database
     const rowsResults = await notion.databases.query({ database_id: id });
     const rows = rowsResults.results;
-    // Store database icon
+
+    // Store database icon and generate service_url
     for (const row of rows) {
         const page = await notion.pages.retrieve({ page_id: row.id });
         row.icon = extractIcon(page.icon); // Extract and store the icon
+        generateServiceUrl(row); // Update block directly
+
 
         // Check if the row includes an object of type 'people'
         if (row.properties) {
