@@ -1,10 +1,8 @@
-import { parseRichTextToHTML } from './utils';
-
 export function renderBookmark(block: any): string {
-    const { url, metadata } = block.block.bookmark;
-    const hostname = new URL(url).hostname.replace('www.', '');
+  const { url, metadata } = block.block.bookmark;
+  const hostname = new URL(url).hostname.replace('www.', '');
 
-    return `
+  return `
     <div class="notion-bookmark">
       <a href="${url}" target="_blank" class="notion-bookmark-link">
         <div class="notion-bookmark-content">
