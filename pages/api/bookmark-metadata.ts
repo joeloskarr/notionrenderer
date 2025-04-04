@@ -22,7 +22,6 @@ export default async function handler(
     }
 
     try {
-        console.log(url.toString());
         const { data, request } = await axios.get(url.toString(), {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -36,8 +35,6 @@ export default async function handler(
         const $ = cheerio.load(data);
         const finalUrl = request.res.responseUrl || url;
         const parsedUrl = new URL(finalUrl);
-
-        console.log("metadata", data);
 
         const getMeta = (name: string) =>
             $(`meta[name="${name}"]`).attr('content') ||

@@ -1255,7 +1255,23 @@ div.notion-database-database-page>.notion-database-navigation {
 
 .hover-box-content {
     color: rgb(55, 53, 47) !important;
+    display: flex;
+    flex-direction: column;
+    align-items: left;
 }
+
+.link-preview-full-thumbnail img {
+    width: 100%;
+    height: 120px;
+}
+
+.link-preview-full-title {
+    font-size: 0.8em;
+    font-weight: 600;
+    width: 100%;
+}
+
+
 
 .link-preview-full-description {
     color: gray;

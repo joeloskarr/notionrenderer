@@ -10,7 +10,6 @@ export function escapeHTML(str: string): string {
 
 // Function to parse rich text annotations and generate HTML
 export function parseRichTextToHTML(richText: any[]): string {
-    console.log(richText);
     return richText.map((textObj) => {
         let content, html;
 
@@ -29,24 +28,31 @@ export function parseRichTextToHTML(richText: any[]): string {
             return `<span class="math-expression" ${style}>\\(${escapeHTML(expression)}\\)</span>`;
         }
 
-        if (textObj.type === "mention" && textObj.mention?.type === "link_mention") {
-            const linkMention = textObj.mention.link_mention;
-            const { href, title, description, icon_url, thumbnail_url } = linkMention;
-
+        if (textObj.type === "mention" && (textObj.mention?.type === "link_mention" || textObj.mention?.type === "link_preview")) {
+            const isLinkPreview = (textObj.mention?.type === "link_preview");
+            const linkMention = textObj.mention.link_mention || textObj.mention.link_preview;
+            const { title, description, thumbnail_url } = linkMention;
+            const href = linkMention.url || linkMention.href;
+            const icon_url = linkMention.icon_url || linkMention.favicon;
             // Shorten description and title
             const shortDescription = description.length > 30 ? description.substring(0, 30) + "..." : description;
 
             let shortTitle = title;
-            if (href.startsWith("https://github.com")) {
+            if (href.startsWith("https://github.com")) { //Special case for GitHub links :)
+                console.log(shortTitle);
                 const urlParts = href.split("/").filter(Boolean);
+                const titleParts = title.split(" · ").filter(Boolean);
                 const repoName = urlParts[3]; // Extract repository name
+                console.log(href, title, urlParts.length);
+                console.log(urlParts[0], urlParts[1], urlParts[2], urlParts[3], urlParts[4], urlParts[5]);
                 if (urlParts.length === 5) {
                     // Format: https://github.com/user/repo/pulls
-                    shortTitle = `${repoName} Pull requests`;
-                } else if (urlParts.length === 6 && urlParts[4] === "pull") {
+                    shortTitle = `${repoName} ${titleParts[0]}`;
+                } else if (urlParts.length === 6) {
                     // Format: https://github.com/user/repo/pull/38
-                    const pullNumber = urlParts[5];
-                    shortTitle = `${repoName} Pull Request #${pullNumber}`;
+                    shortTitle = `${titleParts[1]}`;
+                } else if (urlParts.length === 4) {
+                    shortTitle = `${repoName}`;
                 }
             } else if (title.length > 60) {
                 shortTitle = title.substring(0, 60) + "...";
@@ -60,12 +66,15 @@ export function parseRichTextToHTML(richText: any[]): string {
                 <span class="link-preview" style="display: inline-flex; align-items: center; gap: 8px; position: relative;">
                     <a href="${href}" target="_blank" style="text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 8px;">
                         <img src="${icon_url}" alt="favicon" style="width: 16px; height: 16px; border-radius: 2px;">
-                        <span class="link-preview-domain">${escapeHTML(urlDomain)}</span>
+                        ${isLinkPreview ? '' : '<span class="link-preview-domain">' + escapeHTML(urlDomain) + '</span>'}
                         <span class="link-preview-title">${escapeHTML(shortTitle)}</span>
                     </a>
-                    <span class="hover-box">
-                        <span class="hover-box-content" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                            <span class="link-preview-full-thumbnail"><img src="${thumbnail_url}" alt="icon" style="width: 48px; height: 48px; border-radius: 4px;"></span>
+                    `;
+
+            if (!isLinkPreview) {
+                html += `<span class="hover-box">
+                        <span class="hover-box-content">
+                            <span class="link-preview-full-thumbnail"><img src="${thumbnail_url}" alt="icon"></span>
                             <span class="link-preview-full-title" style="font-weight: bold; text-align: left;">${escapeHTML(title)}</span>
                             <span class="link-preview-full-description">${escapeHTML(description)}</span>
                         </span>
@@ -74,8 +83,11 @@ export function parseRichTextToHTML(richText: any[]): string {
                             <span>${escapeHTML(urlDomain)}</span>
                         </span>
                     </span>
-                </span>
-            `;
+                    `;
+            }
+
+            html += "</span>"
+
             return html;
         }
 
@@ -109,23 +121,10 @@ export function parseRichTextToHTML(richText: any[]): string {
         // Handle links
         if (textObj.text?.link || textObj.href) {
             const url = textObj.text?.link?.url || textObj.href;
-            const isGitHubLink = url.startsWith("https://github.com");
             let displayText = html;
-
-            if (isGitHubLink) {
-                if (url === "https://github.com/transitive-bullshit/react-static-tweets") {
-                    displayText = "react-static-tweets";
-                } else {
-                    const match = url.match(/^https:\/\/github\.com\/.+\/.+\/.+\/.+$/);
-                    if (match) {
-                        displayText = url.substring(url.lastIndexOf('/') + 1);
-                    }
-                }
-            }
-
-            const icon = isGitHubLink ? '<i class="fab fa-github"></i> ' : '';
-            html = `${icon}<a href="${url}">${displayText}</a>`;
+            html = `<a href="${url}">${displayText}</a>`;
         }
+
 
         return html;
     }).join("");

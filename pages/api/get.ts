@@ -271,7 +271,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (error.code === "object_not_found") {
             // HANDLE SOLE DATABASE
             let { database, rows } = await getDatabase(masterBlockId, notion);
-            console.log(blocks);
             let block = {
                 database: database,
                 rows: rows, // Add rows to the block

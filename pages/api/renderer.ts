@@ -118,9 +118,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       case 'quote':
         return renderQuote(block);
       case 'bulleted_list_item':
-        return `<li>${parseRichTextToHTML(block.block.bulleted_list_item.rich_text)}</li>`;
+        return renderNestedList([block.block], 'bulleted_list_item');
       case 'numbered_list_item':
-        return `<li>${parseRichTextToHTML(block.block.numbered_list_item.rich_text)}</li>`;
+        const start = getNumberedListStart(blocks, block.block.id);
+        return renderNestedList([block.block], 'numbered_list_item', start);
       case 'code':
         return renderCodeBlock(block);
       case 'table_of_contents':
@@ -429,9 +430,110 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           </div>
         `;
       }
+      case 'link_preview': {
+        const href = block.block.link_preview.url;
+        const icon_url = block.block.link_preview.favicon || '';
+        const thumbnail_url = block.block.link_preview.image || '';
+        const title = block.block.link_preview.title || '';
+        const shortTitle = title.length > 30 ? `${title.substring(0, 30)}...` : title;
+        const description = block.block.link_preview.description || '';
+        const urlDomain = new URL(href).hostname;
+
+        return `
+          <span class="link-preview" style="display: inline-flex; align-items: center; gap: 8px; position: relative;">
+            <a href="${href}" target="_blank" style="text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 8px;">
+              <img src="${icon_url}" alt="favicon" style="width: 16px; height: 16px; border-radius: 2px;">
+              <span class="link-preview-domain">${escapeHTML(urlDomain)}</span>
+              <span class="link-preview-title">${escapeHTML(shortTitle)}</span>
+            </a>
+            <span class="hover-box">
+              <span class="hover-box-content">
+                <span class="link-preview-full-thumbnail"><img src="${thumbnail_url}" alt="thumbnail"></span>
+                <span class="link-preview-full-title" style="font-weight: bold; text-align: left;">${escapeHTML(title)}</span>
+                <span class="link-preview-full-description">${escapeHTML(description)}</span>
+              </span>
+              <span class="hover-box-footer" style="margin-top: 8px; font-size: 0.8em; color: gray; display: flex; align-items: center; gap: 4px;">
+                <img src="${icon_url}" alt="favicon" style="width: 12px; height: 12px; border-radius: 2px;">
+                <span>${escapeHTML(urlDomain)}</span>
+              </span>
+            </span>
+          </span>
+        `;
+      }
       default:
         return '';
     }
+  }
+
+  // Ridiculously complex function to get the start number of a numbered list
+  function getNumberedListStart(listBlocks: any[], currentBlockId: string): number {
+    let targetBlock: any = null;
+    let parentBlockId: string | null = null;
+
+    // Helper function to find the block with currentBlockId and its parent
+    function findBlockAndParent(blocksParam: any[], currentBlockId: string): boolean {
+      for (const arrayBlock of blocksParam) {
+        let block = arrayBlock.block || arrayBlock;
+
+        if (block?.id === currentBlockId) {
+          targetBlock = block;
+          parentBlockId = block?.parent[block?.parent?.type] || null;
+          return true;
+        }
+
+        // Check children recursively
+        if (block?.children) {
+          const foundInChildren = findBlockAndParent(block.children, currentBlockId);
+          if (foundInChildren) return true;
+        }
+      }
+      return false;
+    }
+
+    // Helper function to count numbered_list_items before the target block
+    function countNumberedListItems(parentChildren: any[], currentBlockId: string): number {
+      let count = 0;
+      for (const arrayChild of parentChildren) {
+        let child = arrayChild.block || arrayChild;
+        if (child.id === currentBlockId) break;
+        if (child.type === 'numbered_list_item') count++;
+      }
+      return count;
+    }
+
+    // Step 1: Find the target block and its parent
+    findBlockAndParent(listBlocks, currentBlockId);
+
+    if (!targetBlock || !parentBlockId) return 1; // Default to 1 if block or parent not found
+
+    // Step 2: Find the parent's children
+    let parentChildren: any[] = [];
+    function findParentChildren(blocksParam: any[], parentBlockId: string): boolean {
+      for (const arrayBlock of blocksParam) {
+        let block = arrayBlock.block || arrayBlock;
+        if (block?.id === parentBlockId) {
+          parentChildren = block?.children || [];
+          return true;
+        }
+
+        // Check children recursively
+        if (block?.children) {
+          const foundInChildren = findParentChildren(block.children, parentBlockId);
+          if (foundInChildren) return true;
+        }
+      }
+      return false;
+    }
+
+    findParentChildren(listBlocks, parentBlockId);
+
+    // Case for top level numbered lists where parent is the page itself
+    if (parentBlockId == metaBlock.id) {
+      console.log("we are here");
+      return countNumberedListItems(blocks, currentBlockId) + 1; // Start numbering from 1
+    }
+    // Step 3: Count numbered_list_items before the target block
+    return countNumberedListItems(parentChildren, currentBlockId) + 1; // Start numbering from 1
   }
 
 
@@ -673,16 +775,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return html1;
   }
 
-  function renderNestedList(blocks: any[], type: string, start: number = 1): string {
+  function renderNestedList(listBlocks: any[], type: string, start: number = 1): string {
     let html = type === 'numbered_list_item' ? `<ol start="${start}">` : '<ul>';
 
-    blocks.forEach((block: any) => {
+    listBlocks.forEach((block: any) => {
+      if (!block.type.includes("list_item")) return;
+
+      // if (type != 'numbered_list_item')
+      //   console.log("Logging", parseRichTextToHTML(block.bulleted_list_item.rich_text));
 
       html += `<div class="block" id="${block.id}">`;
-      html += renderBlock({ block: block });
+      html += '<li>' + parseRichTextToHTML(block[type].rich_text) + '</li>';
+      //html += renderBlock({ block: block });
 
-      if (block.block.children?.length > 0) {
-        html += renderNestedList(block.block.children, type);
+      let children = block.block?.children || block.children;
+
+      if (children && children.length > 0) {
+        html += renderNestedList(children, type);
       }
       html += '</div>';
     });
@@ -768,7 +877,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const type = block.block?.type || block.type;
 
       // NUMBERED LISTS LOGIC
-      if (type === 'numbered_list_item') {
+      if (type === 'REMOVEnumbered_list_item') {
         html += `<div class="block" id="${block.block.id}">`;
         let start = block.block.numbered_list_item.start || 1;
         const numberedBlocks = [];
@@ -782,12 +891,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         html += renderNestedList(numberedBlocks, 'numbered_list_item', start);
         html += '</div>';
         // BULLETED LISTS LOGIC
-      } else if (type === 'bulleted_list_item') {
-        html += `<div class="block" id="${block.block.id}">`;
-        html += renderNestedList([block.block], 'bulleted_list_item');
-        html += '</div>';
-        i++;
-        // DEFAULT BLOCKS
       } else {
         html += `<div class="block" id="${block.block.id}">`;
         html += renderBlock(block);
