@@ -2,25 +2,32 @@
 
 This is a renderer for the Notion API, built using [Next.js](https://nextjs.org). It allows you to render Notion pages and blocks with ease. However, certain features are not supported due to limitations in the Notion API.
 
-## Getting Started
+# How to Use
 
-First, run the development server:
+1. **Get a Notion API Key**  
+   - Visit [Notion Developers](https://developers.notion.com/) and generate an API key.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+2. **Create an OAuth Flow and Approve Workspaces**  
+   - Set up an OAuth flow to connect your application to Notion and approve the required workspaces.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. **Deploy This Project to Vercel**  
+   - Deploy the project to [Vercel](https://vercel.com/) for hosting.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+4. **Include `notion_renderer.js` in Your Project**  
+   - Add `notion_renderer.js` to your project. This is required for rendering specific elements like Twitter embeds and equations.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+5. **Call the API**  
+   - Use the following format to call the API:  
+     ```
+     yourserver.com/?id=[notion-block-id]
+     ```
+     Replace `[notion-block-id]` with the last part of your Notion URL. For example, if your Notion URL is:  
+     `https://www.notion.so/Example-Page-125aaa7b9847805180c5dde2bdca0a45`  
+     Then the `notion-block-id` is `125aaa7b9847805180c5dde2bdca0a45`.
+
+6. **Receive Rendered HTML**  
+   - The API will return the rendered HTML for the specified Notion block.
+    
 
 ## Unsupported Features
 
@@ -41,6 +48,8 @@ The following features are not supported due to limitations in the Notion API:
   - The API does not provide decimals properly.
 - Link previews (potentially possible to implement).
 - Mentions and embeds generally work, except for some that require API access to unfurl (e.g., Reddit).
+- Tables: Does not support row / column wide text colors or backgrounds as the API does not expose. Does support cell-level text formatting though.
+- Buttons: not supported by api.
 
 ## Learn More
 

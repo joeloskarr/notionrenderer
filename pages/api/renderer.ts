@@ -9,6 +9,7 @@ import { renderColumnList, renderColumn } from './renderer/columns';
 import { renderImage } from './renderer/image';
 import { renderBookmark } from './renderer/bookmark';
 import { renderToDo } from './renderer/todo';
+import { renderTables } from './renderer/tables';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query; // Extract 'id' from the query parameters
@@ -460,6 +461,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           </span>
         `;
       }
+      case 'table':
+        return renderTables(block.block, block.block.children);
+      case 'breadcrumb':
+        return renderBreadcrumb(metaBlock.breadcrumb);
       default:
         return '';
     }
@@ -876,27 +881,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const type = block.block?.type || block.type;
 
-      // NUMBERED LISTS LOGIC
-      if (type === 'REMOVEnumbered_list_item') {
-        html += `<div class="block" id="${block.block.id}">`;
-        let start = block.block.numbered_list_item.start || 1;
-        const numberedBlocks = [];
 
-        // Collect consecutive numbered_list_item blocks
-        while (i < blocks.length && blocks[i].block?.type === 'numbered_list_item') {
-          numberedBlocks.push(blocks[i].block);
-          i++;
-        }
+      html += `<div class="block" id="${block.block.id}">`;
+      html += renderBlock(block);
+      html += '</div>';
+      i++;
 
-        html += renderNestedList(numberedBlocks, 'numbered_list_item', start);
-        html += '</div>';
-        // BULLETED LISTS LOGIC
-      } else {
-        html += `<div class="block" id="${block.block.id}">`;
-        html += renderBlock(block);
-        html += '</div>';
-        i++;
-      }
     }
 
     html += '</div>'; // Close notion-page-content

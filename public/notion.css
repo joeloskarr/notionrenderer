@@ -36,6 +36,12 @@
 
 }
 
+* {
+    box-sizing: border-box;
+    margin: 0;
+}
+
+
 html,
 body {
     margin: 0;
@@ -146,6 +152,21 @@ h1 {
 
 a {}
 
+
+
+.page {
+    display: grid;
+    grid-template-rows: 20px 1fr 20px;
+    align-items: center;
+    justify-items: center;
+    min-height: 100svh;
+    padding: 80px;
+    gap: 64px;
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+    line-height: 1.5;
+}
+
+
 .child-page a {
     color: #37352f;
     text-decoration: none;
@@ -175,8 +196,21 @@ a {}
 }
 
 .layout-full {
+    display: grid;
+    grid-template-rows: 20px 1fr 20px;
+    align-items: center;
+    justify-items: center;
+    min-height: 100svh;
+    padding: 80px;
+    gap: 64px;
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+    line-height: 1.5;
     max-width: 900px;
     margin: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    grid-row-start: 2;
     width: var(--notion-content-width);
 }
 

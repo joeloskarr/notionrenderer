@@ -31,7 +31,8 @@ export function parseRichTextToHTML(richText: any[]): string {
         if (textObj.type === "mention" && (textObj.mention?.type === "link_mention" || textObj.mention?.type === "link_preview")) {
             const isLinkPreview = (textObj.mention?.type === "link_preview");
             const linkMention = textObj.mention.link_mention || textObj.mention.link_preview;
-            const { title, description, thumbnail_url } = linkMention;
+            const { title, description } = linkMention;
+            const thumbnail_url = linkMention.thumbnail_url || linkMention.image_url || linkMention.icon_url;
             const href = linkMention.url || linkMention.href;
             const icon_url = linkMention.icon_url || linkMention.favicon;
             // Shorten description and title
