@@ -17,19 +17,27 @@ export default async function handler(
     const { url } = req.query;
 
     if (!url || typeof url !== 'string') {
+        console.log("error?");
         return res.status(400).json({ error: 'Missing URL parameter' });
     }
 
     try {
+        console.log(url.toString());
         const { data, request } = await axios.get(url.toString(), {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; Notion-Web-Bookmark-Parser/1.0)'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Cache-Control': 'no-cache'
             }
         });
+
 
         const $ = cheerio.load(data);
         const finalUrl = request.res.responseUrl || url;
         const parsedUrl = new URL(finalUrl);
+
+        console.log("metadata", data);
 
         const getMeta = (name: string) =>
             $(`meta[name="${name}"]`).attr('content') ||
@@ -39,7 +47,13 @@ export default async function handler(
         const metadata: Metadata = {
             title: $('title').first().text() || parsedUrl.hostname,
             description: getMeta('description') || '',
-            favicon: `${parsedUrl.origin}/favicon.ico`,
+            favicon: (() => {
+                const iconLink = $('link[rel="icon"]').attr('href');
+                if (iconLink) {
+                    return iconLink.startsWith('http') ? iconLink : `${parsedUrl.origin}${iconLink}`;
+                }
+                return `${parsedUrl.origin}/favicon.ico`;
+            })(),
             image: (() => {
                 const image = getMeta('image') || null;
                 if (image && image.startsWith('/')) {
@@ -52,6 +66,7 @@ export default async function handler(
         res.setHeader('Cache-Control', 'public, s-maxage=86400');
         return res.json(metadata);
     } catch (error) {
+        console.log(error);
         const hostname = new URL(url as string).hostname;
         return res.json({
             title: hostname,

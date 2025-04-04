@@ -31,63 +31,50 @@ export function parseRichTextToHTML(richText: any[]): string {
 
         if (textObj.type === "mention" && textObj.mention?.type === "link_mention") {
             const linkMention = textObj.mention.link_mention;
-            const { href, title, description, icon_url } = linkMention;
+            const { href, title, description, icon_url, thumbnail_url } = linkMention;
 
-            // Shorten description to 50 characters
+            // Shorten description and title
             const shortDescription = description.length > 30 ? description.substring(0, 30) + "..." : description;
-            const shortTitle = title.length > 30 ? title.substring(0, 30) + "..." : title;
+
+            let shortTitle = title;
+            if (href.startsWith("https://github.com")) {
+                const urlParts = href.split("/").filter(Boolean);
+                const repoName = urlParts[3]; // Extract repository name
+                if (urlParts.length === 5) {
+                    // Format: https://github.com/user/repo/pulls
+                    shortTitle = `${repoName} Pull requests`;
+                } else if (urlParts.length === 6 && urlParts[4] === "pull") {
+                    // Format: https://github.com/user/repo/pull/38
+                    const pullNumber = urlParts[5];
+                    shortTitle = `${repoName} Pull Request #${pullNumber}`;
+                }
+            } else if (title.length > 60) {
+                shortTitle = title.substring(0, 60) + "...";
+            }
 
             // Parse URL to get the domain
             const urlDomain = new URL(href).hostname.replace("www.", "");
 
-            // One-line preview
+            // One-line preview with hover-box
             html = `
-                <div class="link-preview" style="display: inline-flex; align-items: center; gap: 8px;">
-                    <img src="${icon_url}" alt="favicon" style="width: 16px; height: 16px; border-radius: 2px;">
-                    <span class="link-preview-domain">${escapeHTML(urlDomain)}</span>
-                    <span class="link-preview-title">${escapeHTML(title)}</span>
-                </div>
-            `;
-
-            // Hoverable box
-            html += `
-                <div class="link-preview-hover" style="position: relative; display: inline-block;">
-                    <div class="hover-box" style="
-                        display: none;
-                        position: absolute;
-                        top: 100%;
-                        left: 0;
-                        width: 300px;
-                        background: white;
-                        border: 1px solid rgba(0, 0, 0, 0.1);
-                        border-radius: 4px;
-                        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-                        padding: 8px;
-                        z-index: 10;
-                    ">
-                        <div style="display: flex; gap: 8px;">
-                            <img src="${icon_url}" alt="icon" style="width: 33%; border-radius: 4px;">
-                            <div style="flex: 1;">
-                                <div class="link-preview-full-title" style="font-weight: bold;">${escapeHTML(title)}</div>
-                                <div class="link-preview-full-description" style="color: gray; font-size: 0.9em;">${escapeHTML(description)}</div>
-                            </div>
-                        </div>
-                        <div style="margin-top: 8px; font-size: 0.8em; color: gray; display: flex; align-items: center; gap: 4px;">
+                <span class="link-preview" style="display: inline-flex; align-items: center; gap: 8px; position: relative;">
+                    <a href="${href}" target="_blank" style="text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 8px;">
+                        <img src="${icon_url}" alt="favicon" style="width: 16px; height: 16px; border-radius: 2px;">
+                        <span class="link-preview-domain">${escapeHTML(urlDomain)}</span>
+                        <span class="link-preview-title">${escapeHTML(shortTitle)}</span>
+                    </a>
+                    <span class="hover-box">
+                        <span class="hover-box-content" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                            <span class="link-preview-full-thumbnail"><img src="${thumbnail_url}" alt="icon" style="width: 48px; height: 48px; border-radius: 4px;"></span>
+                            <span class="link-preview-full-title" style="font-weight: bold; text-align: left;">${escapeHTML(title)}</span>
+                            <span class="link-preview-full-description">${escapeHTML(description)}</span>
+                        </span>
+                        <span class="hover-box-footer" style="margin-top: 8px; font-size: 0.8em; color: gray; display: flex; align-items: center; gap: 4px;">
                             <img src="${icon_url}" alt="favicon" style="width: 12px; height: 12px; border-radius: 2px;">
                             <span>${escapeHTML(urlDomain)}</span>
-                        </div>
-                    </div>
-                </div>
-                <script>
-                    document.querySelectorAll('.link-preview-hover').forEach(el => {
-                        el.addEventListener('mouseenter', () => {
-                            el.querySelector('.hover-box').style.display = 'block';
-                        });
-                        el.addEventListener('mouseleave', () => {
-                            el.querySelector('.hover-box').style.display = 'none';
-                        });
-                    });
-                </script>
+                        </span>
+                    </span>
+                </span>
             `;
             return html;
         }
@@ -126,9 +113,13 @@ export function parseRichTextToHTML(richText: any[]): string {
             let displayText = html;
 
             if (isGitHubLink) {
-                const match = url.match(/^https:\/\/github\.com\/.+\/.+\/.+\/.+$/);
-                if (match) {
-                    displayText = url.substring(url.lastIndexOf('/') + 1);
+                if (url === "https://github.com/transitive-bullshit/react-static-tweets") {
+                    displayText = "react-static-tweets";
+                } else {
+                    const match = url.match(/^https:\/\/github\.com\/.+\/.+\/.+\/.+$/);
+                    if (match) {
+                        displayText = url.substring(url.lastIndexOf('/') + 1);
+                    }
                 }
             }
 

@@ -78,35 +78,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Extract color and determine background style if applicable
     const color = block.block[type]?.color || block[type]?.color;
-    const bgClass = color && color.includes("_background")
-      ? `color-bg-${color.split("_")[0]}`
+    const colorOption = color
+      ? color.includes("_background")
+        ? `color-bg-${color.split("_")[0]}`
+        : `color-text-${color}`
       : "";
 
     switch (type) {
       case 'paragraph':
-        return `<p class="${bgClass}">${parseRichTextToHTML(block.block.paragraph.rich_text)}</p>`;
+        return `<p class="${colorOption}">${parseRichTextToHTML(block.block.paragraph.rich_text)}</p>`;
       case 'child_page':
         return `
-          <div class="child-page ${bgClass}">
+          <div class="child-page ${colorOption}">
             <a href="${block.block.page.service_url}" target="_blank">
               <span class="emoji">${block.block.page.icon?.emoji || '📄'}</span> <span class="alink">${block.block.page.properties.title.title[0].plain_text}</span>
             </a>
           </div>`;
       case 'heading_1':
-        return renderHeading1(block, bgClass, renderBlock);
+        return renderHeading1(block, colorOption, renderBlock);
 
       case 'heading_2':
-        return renderHeading2(block, bgClass, renderBlock);
+        return renderHeading2(block, colorOption, renderBlock);
 
       case 'heading_3':
-        return renderHeading3(block, bgClass, renderBlock);
+        return renderHeading3(block, colorOption, renderBlock);
 
       case 'toggle':
-        return renderToggle(block, bgClass, renderBlock);
+        return renderToggle(block, colorOption, renderBlock);
       case 'divider':
         return `<div class="divider" />`;
       case 'callout':
-        return renderCallout(block, bgClass, renderBlock);
+        return renderCallout(block, colorOption, renderBlock);
       case 'column_list':
         return renderColumnList(block, renderBlock);
       case 'column':

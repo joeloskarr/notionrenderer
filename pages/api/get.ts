@@ -14,6 +14,8 @@ import { isDev, server } from '@/app/config';
 // ------ Grouped tables won't wokr. 
 // ------ Order of the database (columns or rows) are not exposed either
 // ------ The API does provide decimals properly (at all).
+// --- Link previews (potentially possible to implement)
+// --- Mentions and embeds generally work. Exception some that require API access to unfurl (Reddit) 
 
 async function processBlock(block: any, notion: any): Promise<any> {
     generateServiceUrl(block); // Update block directly
@@ -21,6 +23,21 @@ async function processBlock(block: any, notion: any): Promise<any> {
     if (block.type === 'bookmark') {
         const url = block.bookmark.url;
         block.bookmark.metadata = await fetchBookmarkMetadata(url); // Fetch and store metadata
+    } else if (block.type === 'paragraph') {
+        const richText = block.paragraph.rich_text;
+        if (richText?.length > 0) {
+            for (const text of richText) {
+                if (text.type === 'mention' && text.mention.type === 'link_preview') {
+                    const url = text.mention.link_preview.url;
+                    text.mention.link_preview = await fetchBookmarkMetadata(url); // Fetch and store metadata
+                    text.mention.link_preview.url = url; // Ensure the URL is preserved
+                }
+            }
+        }
+    } else if (block.type === 'link_preview') {
+        const url = block.link_preview.url;
+        block.link_preview = await fetchBookmarkMetadata(url); // Fetch and store metadata
+        block.link_preview.url = url; // Ensure the URL is preserved
     } else if (block.type === 'child_page') {
         const page = await notion.pages.retrieve({ page_id: block.id });
         generateServiceUrl(page); // Update block directly
@@ -242,8 +259,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             block_id: masterBlockId,
             page_size: 100,
         });
-
-        console.log(blocks);
 
         // HANDLE SOLE DATABASE
         if (blocks.results.length <= 1) {

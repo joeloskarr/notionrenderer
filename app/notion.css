@@ -1224,11 +1224,42 @@ div.notion-database-database-page>.notion-database-navigation {
     color: rgba(55, 53, 47, 0.65) !important;
     line-height: 120%;
     min-width: 0px;
-    font-size: 14px;
     white-space: nowrap;
     width: auto;
 }
 
 .link-preview-title {
     font-weight: 600;
+}
+
+.link-preview .hover-box {
+    transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out;
+    opacity: 0;
+    visibility: hidden;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 300px;
+    background: white;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    padding: 8px;
+    z-index: 10;
+}
+
+.link-preview:hover .hover-box {
+    opacity: 1;
+    visibility: visible;
+}
+
+.hover-box-content {
+    color: rgb(55, 53, 47) !important;
+}
+
+.link-preview-full-description {
+    color: gray;
+    font-size: 0.8em;
+    text-align: left;
+    line-height: 1.5;
 }
