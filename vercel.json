@@ -1,0 +1,13 @@
+{
+    "functions": {
+        "pages/api/get.ts": {
+            "maxDuration": 60
+        },
+        "pages/api/renderer.ts": {
+            "maxDuration": 60
+        },
+        "pages/api/crawl.ts": {
+            "maxDuration": 60
+        }
+    }
+}
