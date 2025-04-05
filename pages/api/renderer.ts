@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { renderPDFBlock } from './renderer/pdf';
 import { renderVideoBlock } from './renderer/video';
-import { escapeHTML, parseRichTextToHTML, getOptionStyle } from './renderer/utils';
+import { escapeHTML, parseRichTextToHTML, getOptionStyle, extractIcon } from './renderer/utils';
 import { renderHeading1, renderHeading2, renderHeading3 } from './renderer/headings';
 import { renderCodeBlock } from './renderer/code';
 import { renderCallout, renderToggle, renderQuote } from './renderer/misc';
@@ -91,8 +91,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       case 'child_page':
         return `
           <div class="child-page ${colorOption}">
-            <a href="${block.block.page.service_url}" target="_blank">
-              <span class="emoji">${block.block.page.icon?.emoji || '📄'}</span> <span class="alink">${block.block.page.properties.title.title[0].plain_text}</span>
+          <span class="emoji">${block.block.page.icon?.emoji || '📄'}</span>   
+          <a href="${block.block.page.service_url}">
+              <span class="alink">${block.block.page.properties.title.title[0].plain_text}</span>
             </a>
           </div>`;
       case 'heading_1':
@@ -874,28 +875,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let i = 0;
     while (i < blocks.length) {
       const block = blocks[i];
-      if (block.master) { //Don't render header. It is rendered above.
+      if (block.master) { // Don't render header. It is rendered above.
         i++;
         continue;
       }
-
-      const type = block.block?.type || block.type;
-
 
       html += `<div class="block" id="${block.block.id}">`;
       html += renderBlock(block);
       html += '</div>';
       i++;
-
     }
 
     html += '</div>'; // Close notion-page-content
     html += '</div>'; // Close layout-content
     html += '</div>'; // Close layout-full
-    return html;
+
+    // Extract headers
+    const headers = {
+      title: metaBlock.properties?.title?.title[0]?.plain_text || '',
+      favicon: extractIcon(metaBlock.icon)
+    };
+
+    return { headers, html };
   }
 
-  const html = renderContent();
+  const { headers, html } = renderContent();
 
-  res.status(200).json(html);
+  res.status(200).json({ headers, html });
 }

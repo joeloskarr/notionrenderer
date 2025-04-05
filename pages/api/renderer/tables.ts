@@ -1,7 +1,7 @@
 import { parseRichTextToHTML } from './utils';
 
 export function renderTables(table: any, rows: any[]): string {
-    const { table_width, has_column_header, has_row_header } = table.table;
+    const { has_column_header, has_row_header } = table.table;
 
     let html = '<table class="notion-table">';
 

@@ -7,8 +7,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Notion SDK for JavaScript
     const { Client } = require("@notionhq/client");
     const notion = new Client({ auth: process.env.NOTION_KEY });
-    const results = [];
-    const test_page_Id = "1c4aaa7b9847809995d5d0b31fc6bcd1"; // PageID
     const masterBlockId = req.query.id as string; // BlockID
 
     let blocks;

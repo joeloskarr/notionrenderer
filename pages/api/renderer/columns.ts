@@ -1,4 +1,3 @@
-import { parseRichTextToHTML } from './utils';
 
 export function renderColumnList(block: any, renderBlock: Function): string {
   return `

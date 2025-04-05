@@ -1,6 +1,7 @@
+import { server } from '@/app/config';
+
 export function renderBookmark(block: any): string {
   const { url, metadata } = block.block.bookmark;
-  const hostname = new URL(url).hostname.replace('www.', '');
 
   return `
     <div class="notion-bookmark">
@@ -28,4 +29,20 @@ export function renderBookmark(block: any): string {
       </a>
     </div>
   `;
+}
+
+export async function fetchBookmarkMetadata(url: string) {
+  try {
+    const response = await fetch(server + `bookmark-metadata?url=${encodeURIComponent(url)}`);
+    if (!response.ok) throw new Error('Failed to fetch metadata');
+    return await response.json();
+  } catch (error) {
+    console.error('Metadata fetch failed:', error);
+    return {
+      title: new URL(url).hostname,
+      description: '',
+      favicon: `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`,
+      image: null
+    };
+  }
 }

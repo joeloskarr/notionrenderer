@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { isDev, server } from '@/app/config';
+import { isDev, server, serviceUrl } from '@/app/config';
+import { extractIcon } from './renderer/utils'; // Import extractIcon from utils
+import { fetchBookmarkMetadata } from './renderer/bookmark'; // Import fetchBookmarkMetadata
 
 // Features not supported
 // -- Synced blocks (works but not implemented)
@@ -108,30 +110,6 @@ async function fetchChildrenRecursively(notion: any, blockId: string) {
     return children;
 }
 
-async function fetchBookmarkMetadata(url: string) {
-    try {
-        const response = await fetch(server + `/api/bookmark-metadata?url=${encodeURIComponent(url)}`);
-        if (!response.ok) throw new Error('Failed to fetch metadata');
-        return await response.json();
-    } catch (error) {
-        console.error('Metadata fetch failed:', error);
-        return {
-            title: new URL(url).hostname,
-            description: '',
-            favicon: `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`,
-            image: null
-        };
-    }
-}
-
-function extractIcon(icon: any) {
-    if (!icon) return null;
-    if (icon.type === 'external') return icon.external.url;
-    if (icon.type === 'emoji') return icon.emoji;
-    if (icon.type === 'file') return icon.file.url;
-    return null;
-}
-
 async function isImageUrl(url: string): Promise<boolean> {
     try {
         const response = await fetch(url, { method: 'GET' });
@@ -223,12 +201,12 @@ function generateServiceUrl(block: any): void {
     if (url) {
         const idMatch = url.match(/([a-zA-Z0-9]+)$/);
         const id = idMatch ? idMatch[1] : '';
-        block.service_url = `http://46.101.7.7:3000/?id=${id}`;
+        block.service_url = serviceUrl + `${id}`;
     } else if (url2) {
         const url2 = block[block.type]?.public_url || block[block.type]?.url
         const idMatch = url2.match(/([a-zA-Z0-9]+)$/);
         const id = idMatch ? idMatch[1] : '';
-        block[block.type].service_url = `http://46.101.7.7:3000/?id=${id}`;
+        block[block.type].service_url = serviceUrl + `${id}`;
     }
     else {
         block.service_url = '';

@@ -36,7 +36,6 @@ export function parseRichTextToHTML(richText: any[]): string {
             const href = linkMention.url || linkMention.href;
             const icon_url = linkMention.icon_url || linkMention.favicon;
             // Shorten description and title
-            const shortDescription = description.length > 30 ? description.substring(0, 30) + "..." : description;
 
             let shortTitle = title;
             if (href.startsWith("https://github.com")) { //Special case for GitHub links :)
@@ -146,4 +145,13 @@ export function getOptionStyle(color: string): string {
         'red': 'var(--color-text-red)'
     };
     return `color: ${colorMap[color]}; background-color: var(--color-bg-${color})`;
+}
+
+
+export function extractIcon(icon: any) {
+    if (!icon) return null;
+    if (icon.type === 'external') return icon.external.url;
+    if (icon.type === 'emoji') return icon.emoji;
+    if (icon.type === 'file') return icon.file.url;
+    return null;
 }
