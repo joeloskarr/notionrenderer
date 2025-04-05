@@ -10,11 +10,12 @@ import { renderImage } from './renderer/image';
 import { renderBookmark } from './renderer/bookmark';
 import { renderToDo } from './renderer/todo';
 import { renderTables } from './renderer/tables';
+import { server } from '@/app/config';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query; // Extract 'id' from the query parameters
 
-  const response = await fetch(`http://localhost:3000/api/get?id=${id}`, {
+  const response = await fetch(server + `get?id=${id}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
