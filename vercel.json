@@ -8,6 +8,9 @@
         },
         "pages/api/crawl.ts": {
             "maxDuration": 60
+        },
+        "pages/[pageId].tsx": {
+            "maxDuration": 60
         }
     }
 }
