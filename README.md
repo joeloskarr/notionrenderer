@@ -16,6 +16,8 @@ This is a renderer for the Notion API, built using [Next.js](https://nextjs.org)
 4. **Include `notion_renderer.js` in Your Project**  
    - Add `notion_renderer.js` to your project. This is required for rendering specific elements like Twitter embeds and equations.
 
+   *Side Note: You will also need a [FontAwesome](https://fontawesome.com/) account to use icons in your project.*
+
 5. **Call the API**  
    - Use the following format to call the API:  
      ```
@@ -50,6 +52,7 @@ The following features are not supported due to limitations in the Notion API:
 - Mentions and embeds generally work, except for some that require API access to unfurl (e.g., Reddit).
 - Tables: Does not support row / column wide text colors or backgrounds as the API does not expose. Does support cell-level text formatting though.
 - Buttons: not supported by api.
+- Cover image: Position of the image is not supported by AI. For best experience ensure it looks good without any adjustments.
 
 ## Learn More
 

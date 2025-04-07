@@ -31,7 +31,8 @@ export function parseRichTextToHTML(richText: any[]): string {
         if (textObj.type === "mention" && (textObj.mention?.type === "link_mention" || textObj.mention?.type === "link_preview")) {
             const isLinkPreview = (textObj.mention?.type === "link_preview");
             const linkMention = textObj.mention.link_mention || textObj.mention.link_preview;
-            const { title, description } = linkMention;
+            const { description } = linkMention;
+            const title = linkMention.title || linkMention.url.split("/").pop()
             const thumbnail_url = linkMention.thumbnail_url || linkMention.image_url || linkMention.icon_url;
             const href = linkMention.url || linkMention.href;
             const icon_url = linkMention.icon_url || linkMention.favicon;
@@ -39,12 +40,9 @@ export function parseRichTextToHTML(richText: any[]): string {
 
             let shortTitle = title;
             if (href.startsWith("https://github.com")) { //Special case for GitHub links :)
-                console.log(shortTitle);
                 const urlParts = href.split("/").filter(Boolean);
                 const titleParts = title.split(" · ").filter(Boolean);
                 const repoName = urlParts[3]; // Extract repository name
-                console.log(href, title, urlParts.length);
-                console.log(urlParts[0], urlParts[1], urlParts[2], urlParts[3], urlParts[4], urlParts[5]);
                 if (urlParts.length === 5) {
                     // Format: https://github.com/user/repo/pulls
                     shortTitle = `${repoName} ${titleParts[0]}`;
@@ -65,7 +63,7 @@ export function parseRichTextToHTML(richText: any[]): string {
             html = `
                 <span class="link-preview" style="display: inline-flex; align-items: center; gap: 8px; position: relative;">
                     <a href="${href}" target="_blank" style="text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 8px;">
-                        <img src="${icon_url}" alt="favicon" style="width: 16px; height: 16px; border-radius: 2px;">
+                        ${icon_url ? `<img src="${icon_url}" alt="favicon" style="width: 16px; height: 16px; border-radius: 2px;">` : (href.startsWith("https://github.com") ? `<i class="fa-brands fa-github" style="font-size: 16px;"></i>` : '')}
                         ${isLinkPreview ? '' : '<span class="link-preview-domain">' + escapeHTML(urlDomain) + '</span>'}
                         <span class="link-preview-title">${escapeHTML(shortTitle)}</span>
                     </a>

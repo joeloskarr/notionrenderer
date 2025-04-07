@@ -15,6 +15,10 @@ import { server } from '@/app/config';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query; // Extract 'id' from the query parameters
 
+  if (!id || id === 'null' || id === 'undefined') {
+    return res.status(400).json({ error: 'No ID provided' });
+  }
+
   const response = await fetch(server + `get?id=${id}`, {
     method: 'GET',
     headers: {
@@ -109,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       case 'toggle':
         return renderToggle(block, colorOption, renderBlock);
       case 'divider':
-        return `<div class="divider" />`;
+        return `<span class="divider-container"><span class="divider">&nbsp;</span></span>`;
       case 'callout':
         return renderCallout(block, colorOption, renderBlock);
       case 'column_list':
@@ -139,8 +143,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } else {
           return `
         <div class="child-page">
-          <a href="${block.block.database.service_url}" target="_blank">
-            <span class="emoji">${block.block.database.icon?.emoji || '📄'}</span> <span class="alink">${block.block.database?.title[0]?.plain_text || "Untitled"}</span>
+        <span class="emoji">${block.block.database.icon?.emoji || '📄'}</span>   
+        <a href="${block.block.database.service_url}" target="_blank">
+            <span class="alink">${block.block.database?.title[0]?.plain_text || "Untitled"}</span>
           </a>
         </div>`;
         }
@@ -536,7 +541,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Case for top level numbered lists where parent is the page itself
     if (parentBlockId == metaBlock.id) {
-      console.log("we are here");
       return countNumberedListItems(blocks, currentBlockId) + 1; // Start numbering from 1
     }
     // Step 3: Count numbered_list_items before the target block
@@ -760,15 +764,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       title = metaBlock.properties?.title?.title[0]?.plain_text; // If normal page
     }
 
-    let html1 = "";
+    let html1 = "<div class='notion-header-cover'>";
 
     // Render cover image if available
-    if (metaBlock.cover) {
-      const coverUrl = metaBlock.cover.type === "external" ? metaBlock.cover.external.url : metaBlock.cover.file.url;
-      html1 += `<div class='notion-header-cover'><img src="${coverUrl}" alt="Cover Image" /></div>`;
+    const coverUrl = (metaBlock.cover?.type === "external" ? metaBlock.cover?.external?.url : metaBlock.cover?.file?.url) || "";
+    if (coverUrl.length >= 5) {
+      html1 += `<img src="${coverUrl}" alt="Cover Image" />`;
     }
 
-    html1 += "<div class='layout-content' style='position: relative; z-index: 2;'>";
+    html1 += "</div>";
+
+    html1 += "<div class='layout-content content-header' style='position: relative; z-index: 2;'>";
     if (metaBlock.icon?.type === "file") {
       html1 += `<div class='notion-header-icon'><img src="${metaBlock.icon.file.url}" alt="Icon" /></div>`;
     } if (metaBlock.icon?.type === "external") {

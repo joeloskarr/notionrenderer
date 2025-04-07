@@ -151,12 +151,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const allChildBlocks = findChildrenRecursively(splitMasterBlockId, allPages);
 
         // Include the root block in the response
-        const result = [rootBlock, ...allChildBlocks].map(block => ({
-            id: block.id,
-            type: block.object,
-            title: block.properties?.title?.title[0]?.plain_text || 'Untitled',
-            url: block.url,
-        }));
+        const result = [rootBlock, ...allChildBlocks]
+            .filter(block => block.id !== null && block.id !== undefined && block.url !== null && block.url !== undefined) // Filter out blocks with null/undefined IDs or URLs
+            .map(block => ({
+                id: block.id.replace(/-/g, ''), // Remove all '-' from block.id
+                type: block.object,
+                title: block.properties?.title?.title[0]?.plain_text || 'Untitled',
+                url: block.url,
+            }));
 
         res.status(200).json({ blocks: result });
 

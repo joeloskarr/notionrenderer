@@ -556,6 +556,7 @@ h1 {
     border: 1px solid rgba(55, 53, 47, 0.16);
 }
 
+
 .notion-bookmark:hover {
     background-color: rgba(55, 53, 47, 0.06);
     transform: translateY(-1px);
@@ -566,6 +567,7 @@ h1 {
     text-decoration: none;
     color: inherit;
     gap: 16px;
+    border-bottom: 0px;
 }
 
 .notion-bookmark-content {

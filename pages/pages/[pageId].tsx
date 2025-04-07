@@ -29,6 +29,12 @@ export async function getStaticPaths() {
 }
 
 export async function getStaticProps({ params }: { params: any }) {
+  console.log("this is going to renderer", params.pageId);
+
+  if (!params || !params.pageId || params.pageId == 'null') {
+    return { props: { html: "<h1>Error loading page</h1>", metadata: { title: "Error", favicon: null } } }; // Provide fallback metadata
+  }
+
   try {
     let url = `${server}renderer?id=${params.pageId}`;
     const response = await fetch(url, {
@@ -73,6 +79,7 @@ export default function Page({ metadata, html }: PageProps) {
         <link rel="icon" href={favicon} />
         <meta name="description" content="Rendered Notion Page" />
       </Head>
+      <Script src="https://kit.fontawesome.com/7594385887.js" strategy="afterInteractive" />
       <Script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/prism.min.js" strategy="afterInteractive" />
       <Script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-core.min.js" strategy="afterInteractive" />
       <Script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/plugins/autoloader/prism-autoloader.min.js" strategy="afterInteractive" />
