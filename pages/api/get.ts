@@ -100,7 +100,13 @@ async function fetchChildrenRecursively(notion: any, blockId: string) {
         });
 
         for (const child of response.results) {
-            children.push(await processBlock(child, notion));
+            try {
+                children.push(await processBlock(child, notion));
+            } catch (error) {
+                console.error('Error processing block:', error);
+                // Skip the block if an error occurs
+                continue;
+            }
         }
 
         hasMore = response.has_more;
@@ -247,19 +253,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (error.code === "validation_error") return res.status(400).json({ message: "Invalid ID", status: 400 });
 
         if (error.code === "object_not_found") {
-            // HANDLE SOLE DATABASE
-            let { database, rows } = await getDatabase(masterBlockId, notion);
-            let block = {
-                database: database,
-                rows: rows, // Add rows to the block
-                type: "child_database",
-            };
-            let master = { ...database };
-            master.breadcrumb = await generateBreadcrumb(database, notion);
-            results.push({ master });
-            results.push({ block });
+            try {
+                // HANDLE SOLE DATABASE
+                let { database, rows } = await getDatabase(masterBlockId, notion);
+                let block = {
+                    database: database,
+                    rows: rows, // Add rows to the block
+                    type: "child_database",
+                };
+                let master = { ...database };
+                master.breadcrumb = await generateBreadcrumb(database, notion);
+                results.push({ master });
+                results.push({ block });
 
-            return res.status(200).json(results);
+                return res.status(200).json(results);
+            } catch (error) {
+                console.error('Error handling sole database:', error);
+                return res.status(500).json({ message: "Failed to handle sole database", status: 500 });
+            }
         }
 
         else {
@@ -284,16 +295,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     for (const block of blocks.results) {
-        results.push({ block: await processBlock(block, notion) });
+        try {
+            results.push({ block: await processBlock(block, notion) });
+        } catch (error) {
+            console.error('Error processing block:', error);
+            // Skip the block if an error occurs
+            continue;
+        }
     }
 
     return res.status(200).json(results);
 }
-
 async function getDatabase(id: string, notion: any): Promise<any> {
-    const database = await notion.databases.retrieve({ database_id: id });
-    const rows = await getDatabaseRows(id, notion);
-    return { database, rows };
+    try {
+        const database = await notion.databases.retrieve({ database_id: id });
+        const rows = await getDatabaseRows(id, notion);
+        return { database, rows };
+    } catch (error) {
+        console.error('Failed to retrieve database:', error);
+        return { database: null, rows: [], error: 'Unable to fetch database' };
+    }
 }
 
 async function getDatabaseRows(id: string, notion: any): Promise<any> {

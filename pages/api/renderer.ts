@@ -27,7 +27,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   });
 
   if (!response.ok) {
-    return res.status(response.status).json({ error: 'Failed to fetch data' });
+    const errorText = await response.text();
+    return res.status(response.status).json({ error: 'Failed to fetch data', details: errorText });
   }
 
   //const blocks = exampleBlocks;
@@ -553,6 +554,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Get the ordered properties, excluding "hidden text"
     let orderedProps = getOrderedProps(database, rows);
 
+    console.log("title", database.title)
+
+    const databaseTitle = database.title?.[0]?.plain_text || database.title.plain_text;
+
     // Navigation panel HTML
     const navigationPanel = `
     <div class="notion-database-navigation">
@@ -565,7 +570,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ${navigationPanel}
   ${isDatabase ? '' : `
     <div class="notion-database-header">
-      <h3>${database.title.plain_text ? parseRichTextToHTML(database.title) : 'Untitled'}</h3>
+      <h3>${databaseTitle ? parseRichTextToHTML(database.title) : 'Untitled'}</h3>
       ${database.description?.length > 0 ? `
         <div class="notion-database-description">
           ${parseRichTextToHTML(database.description)}
@@ -647,6 +652,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ${new Date(property.created_time).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
           </div>
         `;
+      case 'last_edited_time':
+        return `
+          <div class="date-cell">
+            ${new Date(property.last_edited_time).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+          </div>
+        `;
       case 'date':
         return property.date?.start ? `
           <div class="date-cell">
@@ -702,7 +713,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return property.people.map((person: any) => {
           return `
             <div class="person-cell">
-              ${person.object === 'user' ? (person.data?.status ? person.data : '<span class="column-name">N/A</span>') : '<span class="column-name">N/A</span>'}
+              ${person.object === 'user' ? (person.data?.status != '403' ? person.data : '<span class="column-name">N/A</span>') : '<span class="column-name">N/A</span>'}
             </div>
           `;
         }).join('');

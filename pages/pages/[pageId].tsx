@@ -2,6 +2,7 @@ import { rootNotionId, server } from "@/app/config";
 import Head from "next/head";
 import Script from "next/script"; // Import next/script
 
+
 export async function getStaticPaths() {
   try {
     let url = `${server}crawl?id=${rootNotionId}`;
@@ -53,7 +54,7 @@ export async function getStaticProps({ params }: { params: any }) {
     return { props: { html: json.html, metadata: json.headers } }; // Pass headers as metadata
   } catch (error) {
     console.error("Error fetching page:", error);
-    return { props: { html: "<h1>Error loading page</h1>", metadata: { title: "Error", favicon: null } } }; // Provide fallback metadata
+    return { props: { html: "<h1>Error loading page</h1><p>" + error + "</p>", metadata: { title: "Error", favicon: null } } }; // Provide fallback metadata
   }
 }
 

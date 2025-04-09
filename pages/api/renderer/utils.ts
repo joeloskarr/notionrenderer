@@ -10,6 +10,7 @@ export function escapeHTML(str: string): string {
 
 // Function to parse rich text annotations and generate HTML
 export function parseRichTextToHTML(richText: any[]): string {
+    console.log("input", richText)
     return richText.map((textObj) => {
         let content, html;
 
@@ -91,6 +92,7 @@ export function parseRichTextToHTML(richText: any[]): string {
 
         if (textObj.text) {
             content = textObj.text.content;
+            console.log("content", content)
         } else {
             content = textObj.plain_text; // Fallback to plain_text if content is not available
         }

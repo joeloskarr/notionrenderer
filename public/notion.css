@@ -541,6 +541,15 @@ b {
 
 .image-block img {
     width: 100%;
+    display: block;
+    object-fit: cover;
+    border-radius: 2px;
+    pointer-events: auto;
+    max-height: 60px;
+}
+
+.image-block {
+    width: fit-content;
 }
 
 .image-caption {
@@ -904,7 +913,7 @@ div.notion-database-database-page>.notion-database-navigation {
     width: 100%;
     overflow-x: auto;
     padding-left: calc(50vw - (var(--notion-content-width))/2);
-    padding-right: calc(50vw - (var(--notion-content-width))/2);
+    padding-right: calc(50vw - (var(--notion-content-width))/2 - 40px);
 }
 
 .notion-database-table {
@@ -991,7 +1000,6 @@ div.notion-database-database-page>.notion-database-navigation {
 
 .notion-database-table th,
 .notion-database-table td {
-    border: 1px solid rgb(233, 233, 231);
     /* Ensure single border */
     border-collapse: collapse;
     /* Prevent double borders */
@@ -1298,6 +1306,11 @@ div.notion-database-database-page>.notion-database-navigation {
 }
 
 .file-block a {
+    display: block;
+    border-bottom: 0px;
+}
+
+.link-preview a {
     display: block;
     border-bottom: 0px;
 }

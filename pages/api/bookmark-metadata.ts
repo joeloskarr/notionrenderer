@@ -37,9 +37,9 @@ export default async function handler(
         const parsedUrl = new URL(finalUrl);
 
         const getMeta = (name: string) =>
+            $(`meta[property="twitter:${name}"]`).attr('content') ||
             $(`meta[name="${name}"]`).attr('content') ||
-            $(`meta[property="og:${name}"]`).attr('content') ||
-            $(`meta[property="twitter:${name}"]`).attr('content');
+            $(`meta[property="og:${name}"]`).attr('content')
 
         const metadata: Metadata = {
             title: $('title').first().text() || parsedUrl.hostname,
