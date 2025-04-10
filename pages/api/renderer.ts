@@ -13,6 +13,16 @@ import { renderTables } from './renderer/tables';
 import { server } from '@/app/config';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Add CORS headers
+  res.setHeader('Access-Control-Allow-Origin', 'http://46.101.7.7:3000'); // Replace with your frontend's origin
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end(); // Handle preflight requests
+    return;
+  }
+
   const { id, nk } = req.query; // Extract 'id' from the query parameters
 
   if (!id || id === 'null' || id === 'undefined') {
