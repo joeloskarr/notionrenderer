@@ -222,20 +222,33 @@ function generateServiceUrl(block: any): void {
 }
 
 function decryptNk(encryptedNk: string): string {
-    const key = process.env.NK_ENCRYPT_KEY || '';
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key, 'hex'), Buffer.alloc(16, 0));
-    let decrypted = decipher.update(encryptedNk, 'base64', 'utf8');
+    const keyBase64 = process.env.NK_ENCRYPT_KEY || '';
+    let key = Buffer.from(keyBase64, 'base64'); // Decode base64 key
+
+    if (key.length !== 32) {
+        if (key.length > 32) {
+            key = key.slice(0, 32); // Truncate to 32 bytes
+        } else {
+            const padding = Buffer.alloc(32 - key.length, 0); // Pad with zeroes
+            key = Buffer.concat([key, padding]);
+        }
+    }
+
+    const [ivHex, encryptedData] = encryptedNk.split(':'); // Extract IV and encrypted data
+    const iv = Buffer.from(ivHex, 'hex'); // Convert IV back to a buffer
+
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv); // Use the extracted IV
+    let decrypted = decipher.update(encryptedData, 'hex', 'utf8'); // Ensure 'hex' encoding for encryptedData
     decrypted += decipher.final('utf8');
     return decrypted;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-
     const encryptedNk = req.query.nk as string;
+    console.log(req.query);
     if (!encryptedNk) {
         return res.status(400).json({ message: "Missing 'nk' query parameter", status: 400 });
     }
-
     let decryptedNk: string;
     try {
         decryptedNk = decryptNk(encryptedNk);
@@ -243,20 +256,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.error('Failed to decrypt nk:', error);
         return res.status(400).json({ message: "Invalid 'nk' query parameter", status: 400 });
     }
-
     const { Client } = require("@notionhq/client");
     const notion = new Client({ auth: decryptedNk });
-    const results = [];
     const test_page_Id = "1c4aaa7b9847809995d5d0b31fc6bcd1"; // PageID
+    const results = [];
     const masterBlockId = req.query.id as string; // BlockID
-
     let blocks;
 
-
     // Get the page the blocks reside on
-
     let notionPage;
-
     try {
         // Get all the Notion blocks
         blocks = await notion.blocks.children.list({
@@ -268,20 +276,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (blocks.results.length <= 1) {
             notionPage = await notion.pages.retrieve({ page_id: masterBlockId }); //Get the page; IF success, it's a Row-page.
         }
-
     } catch (error: any) {
         console.log("testing this", error);
         if (error.code === "validation_error") return res.status(400).json({ message: "Invalid ID", status: 400 });
-
         if (error.code === "object_not_found") {
             try {
                 // HANDLE SOLE DATABASE
                 let { database, rows } = await getDatabase(masterBlockId, notion);
-
                 if (!database || rows.length === 0) {
                     return res.status(500).json({ message: "Not Found", status: 500 });
                 }
-
                 let block = {
                     database: database,
                     rows: rows, // Add rows to the block
@@ -291,14 +295,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 master.breadcrumb = await generateBreadcrumb(database, notion);
                 results.push({ master });
                 results.push({ block });
-
                 return res.status(200).json(results);
             } catch (error) {
                 console.error('Error handling sole database:', error);
                 return res.status(500).json({ message: "Failed to handle sole database", status: 500 });
             }
         }
-
         else {
             console.error(error);
             return res.status(400).json({ message: "Unknown Error", status: 400 });
@@ -332,6 +334,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json(results);
 }
+
 async function getDatabase(id: string, notion: any): Promise<any> {
     try {
         const database = await notion.databases.retrieve({ database_id: id });
@@ -353,7 +356,6 @@ async function getDatabaseRows(id: string, notion: any): Promise<any> {
         const page = await notion.pages.retrieve({ page_id: row.id });
         row.icon = extractIcon(page.icon); // Extract and store the icon
         generateServiceUrl(row); // Update block directly
-
 
         // Check if the row includes an object of type 'people'
         if (row.properties) {

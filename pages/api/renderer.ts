@@ -13,13 +13,13 @@ import { renderTables } from './renderer/tables';
 import { server } from '@/app/config';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { id } = req.query; // Extract 'id' from the query parameters
+  const { id, nk } = req.query; // Extract 'id' from the query parameters
 
   if (!id || id === 'null' || id === 'undefined') {
     return res.status(400).json({ error: 'No ID provided' });
   }
 
-  const response = await fetch(server + `get?id=${id}`, {
+  const response = await fetch(server + `get?id=${id}&nk=${nk}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
