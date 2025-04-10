@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { isDev, server, serviceUrl } from '@/app/config';
 import { extractIcon } from './renderer/utils'; // Import extractIcon from utils
 import { fetchBookmarkMetadata } from './renderer/bookmark'; // Import fetchBookmarkMetadata
+import crypto from 'crypto';
 
 // Features not supported
 // -- Synced blocks (works but not implemented)
@@ -220,11 +221,31 @@ function generateServiceUrl(block: any): void {
     }
 }
 
+function decryptNk(encryptedNk: string): string {
+    const key = process.env.NK_ENCRYPT_KEY || '';
+    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key, 'hex'), Buffer.alloc(16, 0));
+    let decrypted = decipher.update(encryptedNk, 'base64', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
 
-    // Notion SDK for JavaScript
+    const encryptedNk = req.query.nk as string;
+    if (!encryptedNk) {
+        return res.status(400).json({ message: "Missing 'nk' query parameter", status: 400 });
+    }
+
+    let decryptedNk: string;
+    try {
+        decryptedNk = decryptNk(encryptedNk);
+    } catch (error) {
+        console.error('Failed to decrypt nk:', error);
+        return res.status(400).json({ message: "Invalid 'nk' query parameter", status: 400 });
+    }
+
     const { Client } = require("@notionhq/client");
-    const notion = new Client({ auth: process.env.NOTION_KEY });
+    const notion = new Client({ auth: decryptedNk });
     const results = [];
     const test_page_Id = "1c4aaa7b9847809995d5d0b31fc6bcd1"; // PageID
     const masterBlockId = req.query.id as string; // BlockID
@@ -237,7 +258,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let notionPage;
 
     try {
-
         // Get all the Notion blocks
         blocks = await notion.blocks.children.list({
             block_id: masterBlockId,
@@ -250,12 +270,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
     } catch (error: any) {
+        console.log("testing this", error);
         if (error.code === "validation_error") return res.status(400).json({ message: "Invalid ID", status: 400 });
 
         if (error.code === "object_not_found") {
             try {
                 // HANDLE SOLE DATABASE
                 let { database, rows } = await getDatabase(masterBlockId, notion);
+
+                if (!database || rows.length === 0) {
+                    return res.status(500).json({ message: "Not Found", status: 500 });
+                }
+
                 let block = {
                     database: database,
                     rows: rows, // Add rows to the block
