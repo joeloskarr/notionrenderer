@@ -1186,7 +1186,7 @@ div.notion-database-database-page>.notion-database-navigation {
 }
 
 .breadcrumb-bar {
-    position: fixed;
+    position: relative;
     top: 0;
     left: 0;
     width: 100%;

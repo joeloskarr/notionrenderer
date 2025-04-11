@@ -888,12 +888,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   function renderContent() {
-    let html = '<div class="layout-full' + (isDatabase ? ' database-page' : '') + '">';
+
+    let html = "";
 
     // Render breadcrumb if available
     if (metaBlock.breadcrumb) {
       html += renderBreadcrumb(metaBlock.breadcrumb);
     }
+
+    html = '<div class="layout-full' + (isDatabase ? ' database-page' : '') + '">';
 
     html += renderHeader();
 
