@@ -33,9 +33,9 @@ function generateTreemap(tree: any[], prefix = ''): any[] {
         const line = `${prefix}${node.id} ${node.title}`;
         const children = node.children.length > 0 ? generateTreemap(node.children, `${prefix}---`) : [];
         if (children.length > 0) {
-            treemap.push([line, ...children]);
+            treemap.push([line, [...children]]);
         } else {
-            treemap.push(line);
+            treemap.push([line]);
         }
     });
 
