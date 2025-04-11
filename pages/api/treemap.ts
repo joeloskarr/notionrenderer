@@ -26,14 +26,16 @@ function buildTree(blocks: any[]): any[] {
     return rootBlocks;
 }
 
-function generateTreemap(tree: any[], prefix = ''): any[] {
+function generateTreemap(tree: any[], ultimateParent: any, prefix = ''): any[] {
     const treemap: any[] = [];
 
     tree.forEach(node => {
         const line = `${prefix}${node.id} ${node.title}`;
-        const children = node.children.length > 0 ? generateTreemap(node.children, `${prefix}---`) : [];
-        if (children.length > 0) {
+        const children = node.children.length > 0 ? generateTreemap(node.children, ultimateParent, `${prefix}---`) : [];
+        if (children.length > 0 && node.id != ultimateParent.id) {
             treemap.push([line, [...children]]);
+        } else if (children.length > 0 && node.id == ultimateParent.id) {
+            treemap.push(line, ...children);
         } else {
             treemap.push([line]);
         }
@@ -42,13 +44,31 @@ function generateTreemap(tree: any[], prefix = ''): any[] {
     return treemap;
 }
 
+function findUltimateParent(blocks: any[]): any | null {
+    const idToBlockMap: Record<string, any> = {};
+
+    // Map blocks by their ID
+    blocks.forEach(block => {
+        idToBlockMap[block.id] = block;
+    });
+
+    // Find the block with no parent
+    for (const block of blocks) {
+        if (!block.parent || !idToBlockMap[block.parent]) {
+            return block; // This is the ultimate parent block
+        }
+    }
+
+    return null; // No ultimate parent found
+}
+
 export default async function handler(
     req: NextApiRequest,
     res: NextApiResponse
 ) {
     try {
         // Add CORS headers
-        res.setHeader('Access-Control-Allow-Origin', 'http://46.101.7.7:3000'); // Replace with your frontend's origin
+        res.setHeader('Access-Control-Allow-Origin', 'http://46.101.7.7:3000, https://notionrooms.com'); // Replace with your frontend's origins
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -83,11 +103,14 @@ export default async function handler(
             return res.status(500).json({ error: 'Failed to retrieve data from crawl.ts' });
         }
 
+        // Find the ultimate parent block
+        const ultimateParent = findUltimateParent(data.blocks);
+
         // Build the tree and generate the treemap
         const tree = buildTree(data.blocks);
-        const treemap = generateTreemap(tree);
+        const treemap = generateTreemap(tree, ultimateParent);
 
-        return res.status(200).json({ treemap });
+        return res.status(200).json({ treemap, ultimateParent });
     } catch (error) {
         console.error('Error calling crawl.ts:', error);
         return res.status(500).json({ error: 'Internal server error' });
