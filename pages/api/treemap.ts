@@ -33,7 +33,7 @@ function generateTreemap(tree: any[], ultimateParent: any, prefix = ''): any[] {
         const line = `${prefix}${node.id} ${node.title}`;
         const children = node.children.length > 0 ? generateTreemap(node.children, ultimateParent, `${prefix}---`) : [];
         if (children.length > 0 && node.id != ultimateParent.id) {
-            treemap.push([line, [...children]]);
+            treemap.push([line, ...children]);
         } else if (children.length > 0 && node.id == ultimateParent.id) {
             treemap.push(line, ...children);
         } else {
@@ -68,7 +68,7 @@ export default async function handler(
 ) {
     try {
         // Add CORS headers
-        res.setHeader('Access-Control-Allow-Origin', 'http://46.101.7.7:3000'); // Replace with your frontend's origins
+        res.setHeader('Access-Control-Allow-Origin', 'http://46.101.7.7:3000, https://notionrooms.com'); // Replace with your frontend's origins
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
