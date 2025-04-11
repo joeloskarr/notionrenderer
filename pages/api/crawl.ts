@@ -1,26 +1,58 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { isDev, server } from '@/app/config';
+import crypto from 'crypto'; // Import crypto for decryption
 
+function decryptNk(encryptedNk: string): string {
+    const keyBase64 = process.env.NK_ENCRYPT_KEY || '';
+    let key = Buffer.from(keyBase64, 'base64'); // Decode base64 key
+
+    if (key.length !== 32) {
+        if (key.length > 32) {
+            key = key.slice(0, 32); // Truncate to 32 bytes
+        } else {
+            const padding = Buffer.alloc(32 - key.length, 0); // Pad with zeroes
+            key = Buffer.concat([key, padding]);
+        }
+    }
+
+    const [ivHex, encryptedData] = encryptedNk.split(':'); // Extract IV and encrypted data
+    const iv = Buffer.from(ivHex, 'hex'); // Convert IV back to a buffer
+
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv); // Use the extracted IV
+    let decrypted = decipher.update(encryptedData, 'hex', 'utf8'); // Ensure 'hex' encoding for encryptedData
+    decrypted += decipher.final('utf8');
+    return decrypted;
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    const encryptedNk = req.query.nk as string;
+    if (!encryptedNk) {
+        return res.status(400).json({ message: "Missing 'nk' query parameter", status: 400 });
+    }
 
-    // Notion SDK for JavaScript
+    let decryptedNk: string;
+    try {
+        decryptedNk = decryptNk(encryptedNk);
+    } catch (error) {
+        console.error('Failed to decrypt nk:', error);
+        return res.status(400).json({ message: "Invalid 'nk' query parameter", status: 400 });
+    }
+
     const { Client } = require("@notionhq/client");
-    const notion = new Client({ auth: process.env.NOTION_KEY });
+    const notion = new Client({ auth: decryptedNk }); // Use decryptedNk for authentication
     const masterBlockId = req.query.id as string; // BlockID
 
     let blocks;
-
 
     interface CrawlData {
         id: string;
         type: string;
         title: string;
         url: string;
+        parent?: string;
     }
 
     let uniquePages = new Set<CrawlData>();
-
 
     let notionPage;
 
@@ -39,6 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     type: page.object,
                     title: page?.properties?.title?.title[0]?.plain_text || 'Untitled',
                     url: page.url,
+                    parent: page.parent?.page_id || undefined, // Assign parent if it exists
                 };
                 uniquePages.add(entry);
 
@@ -53,6 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     type: database.object,
                     title: database.title[0]?.plain_text || 'Untitled',
                     url: database.url,
+                    parent: database.parent?.page_id || undefined, // Assign parent if it exists
                 };
                 uniquePages.add(entry);
 
@@ -68,6 +102,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     type: 'child_page',
                     title: page?.properties?.title?.title[0]?.plain_text || 'Untitled',
                     url: page.url,
+                    parent: page.parent?.page_id || undefined, // Assign parent if it exists
                 };
                 uniquePages.add(entry);
 
@@ -91,13 +126,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-
         // Get all the Notion blocks
         blocks = await notion.blocks.children.list({
             block_id: masterBlockId,
             page_size: 100,
         });
-
 
         notionPage = await notion.pages.retrieve({ page_id: masterBlockId });
 
@@ -115,7 +148,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             id: notionPage.id,
             type: notionPage.object,
             title: notionPage?.properties?.title?.title[0]?.plain_text || notionPage?.title[0]?.plain_text,
-            url: notionPage.url
+            url: notionPage.url,
+            parent: notionPage.parent?.page_id || undefined, // Assign parent if it exists
         };
 
         uniquePages.add(entry);
@@ -158,6 +192,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 type: block.object,
                 title: block.properties?.title?.title[0]?.plain_text || 'Untitled',
                 url: block.url,
+                parent: block.parent?.page_id?.replace(/-/g, '') || undefined, // Include parent in the result
             }));
 
         res.status(200).json({ blocks: result });
