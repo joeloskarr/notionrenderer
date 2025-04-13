@@ -564,8 +564,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Get the ordered properties, excluding "hidden text"
     let orderedProps = getOrderedProps(database, rows);
 
-    console.log("title", database.title)
-
     const databaseTitle = database.title?.[0]?.plain_text || database.title.plain_text;
 
     // Navigation panel HTML
@@ -889,14 +887,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   function renderContent() {
 
-    let html = "";
+    let html = "<div class='notion-background'>";
 
     // Render breadcrumb if available
     if (metaBlock.breadcrumb) {
       html += renderBreadcrumb(metaBlock.breadcrumb);
     }
 
-    html = '<div class="layout-full' + (isDatabase ? ' database-page' : '') + '">';
+    html += '<div class="layout-full' + (isDatabase ? ' database-page' : '') + '">';
 
     html += renderHeader();
 
@@ -920,6 +918,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     html += '</div>'; // Close notion-page-content
     html += '</div>'; // Close layout-content
     html += '</div>'; // Close layout-full
+    html += '</div>'; // Close notion-background
 
     // Extract headers
     const headers = {

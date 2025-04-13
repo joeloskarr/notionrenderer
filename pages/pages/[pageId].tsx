@@ -5,7 +5,8 @@ import Script from "next/script"; // Import next/script
 
 export async function getStaticPaths() {
   try {
-    let url = `${server}crawl?id=${rootNotionId}`;
+    let url = `${server}crawl?id=${rootNotionId}&nk=ca421701c829bf2990f56b52de133a65%3A229a30107612794b482dd4ba111ea7953fff247ee107502fd4d799f5218cf6d2031b9bc411610e50952dd02e7dc50ba9df0ac3a2d2b1ae6824256148b86797cf`;
+    console.log(url);
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -37,7 +38,7 @@ export async function getStaticProps({ params }: { params: any }) {
   }
 
   try {
-    let url = `${server}renderer?id=${params.pageId}`;
+    let url = `${server}renderer?id=${params.pageId}&nk=ca421701c829bf2990f56b52de133a65%3A229a30107612794b482dd4ba111ea7953fff247ee107502fd4d799f5218cf6d2031b9bc411610e50952dd02e7dc50ba9df0ac3a2d2b1ae6824256148b86797cf`;
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -66,6 +67,8 @@ interface PageProps {
 export default function Page({ metadata, html }: PageProps) {
 
   const isEmoji = (str: string) => /^[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+$/u.test(str);
+
+  console.log(metadata);
 
   const favicon = isEmoji(metadata.favicon)
     ? `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>${metadata.favicon}</text></svg>`

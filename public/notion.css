@@ -135,7 +135,6 @@ body {
     line-height: 1.5;
     color: #37352f;
     margin: 0 auto;
-    padding: 20px;
 }
 
 h1 {
@@ -145,6 +144,10 @@ h1 {
 
 div.block:has(>.divider-container) {
     min-height: 0px;
+}
+
+.notion-background {
+    background: white;
 }
 
 .divider {
@@ -280,6 +283,12 @@ a {
     border-color: rgba(55, 53, 47, .7);
     color: #37352f;
     text-decoration: none;
+}
+
+a.tooltip,
+a.nr-room-disclaimers {
+    border-bottom: 0px;
+    color: red;
 }
 
 h1 a,
