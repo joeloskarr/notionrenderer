@@ -20,8 +20,8 @@ import crypto from 'crypto';
 // --- Link previews (potentially possible to implement)
 // --- Mentions and embeds generally work. Exception some that require API access to unfurl (Reddit) 
 
-async function processBlock(block: any, notion: any): Promise<any> {
-    generateServiceUrl(block); // Update block directly
+async function processBlock(block: any, notion: any, links?: string): Promise<any> {
+    generateServiceUrl(block, links); // Update block directly
 
     if (block.type === 'bookmark') {
         const url = block.bookmark.url;
@@ -43,11 +43,11 @@ async function processBlock(block: any, notion: any): Promise<any> {
         block.link_preview.url = url; // Ensure the URL is preserved
     } else if (block.type === 'child_page') {
         const page = await notion.pages.retrieve({ page_id: block.id });
-        generateServiceUrl(page); // Update block directly
+        generateServiceUrl(page, links); // Update block directly
         block.page = page;
     } else if (block.type === 'toggle') {
         if (block.has_children === true) {
-            block.children = await fetchChildrenRecursively(notion, block.id);
+            block.children = await fetchChildrenRecursively(notion, block.id, links);
         }
     } else if (block.type === 'synced_block') {
         // TODO: Works but Notion is not outputting it for some reason
@@ -58,11 +58,11 @@ async function processBlock(block: any, notion: any): Promise<any> {
         // }
     } else if (block.type.includes("numbered_list") || block.type.includes("bulleted_list")) {
         if (block.has_children === true) {
-            block.children = await fetchChildrenRecursively(notion, block.id);
+            block.children = await fetchChildrenRecursively(notion, block.id, links);
         }
     } else if (block.type === 'column_list') {
         if (block.has_children === true) {
-            block.children = await fetchChildrenRecursively(notion, block.id);
+            block.children = await fetchChildrenRecursively(notion, block.id, links);
 
             // Calculate the number of first-layer children with type "column"
             const columnCount = block.children.filter((child: any) => child.type === 'column').length;
@@ -75,20 +75,20 @@ async function processBlock(block: any, notion: any): Promise<any> {
             });
         }
     } else if (block.type === 'child_database') {
-        let { database, rows } = await getDatabase(block.id, notion);
-        generateServiceUrl(database);
+        let { database, rows } = await getDatabase(block.id, notion, links);
+        generateServiceUrl(database, links);
         block.database = database;
         block.rows = rows; // Add rows to the block
     } else {
         if (block.has_children) {
-            block.children = await fetchChildrenRecursively(notion, block.id);
+            block.children = await fetchChildrenRecursively(notion, block.id, links);
         }
     }
 
     return block;
 }
 
-async function fetchChildrenRecursively(notion: any, blockId: string) {
+async function fetchChildrenRecursively(notion: any, blockId: string, links?: string) {
     const children = [];
     let hasMore = true;
     let cursor = undefined;
@@ -102,7 +102,7 @@ async function fetchChildrenRecursively(notion: any, blockId: string) {
 
         for (const child of response.results) {
             try {
-                children.push(await processBlock(child, notion));
+                children.push(await processBlock(child, notion, links));
             } catch (error) {
                 console.error('Error processing block:', error);
                 // Skip the block if an error occurs
@@ -128,7 +128,7 @@ async function isImageUrl(url: string): Promise<boolean> {
     }
 }
 
-async function generateBreadcrumb(notionPage: any, notion: any): Promise<{ name: string, icon?: string, service_url?: string }[]> {
+async function generateBreadcrumb(notionPage: any, notion: any, links?: string): Promise<{ name: string, icon?: string, service_url?: string }[]> {
     const breadcrumb: { name: string, icon?: string, service_url?: string }[] = [];
     let currentPage = notionPage;
 
@@ -164,7 +164,7 @@ async function generateBreadcrumb(notionPage: any, notion: any): Promise<{ name:
             breadcrumb.unshift(breadCrumbObject);
 
 
-            generateServiceUrl(parentData); // Update block directly
+            generateServiceUrl(parentData, links); // Update block directly
             breadcrumb[0].service_url = parentData.service_url;
 
             // Update the current page to the parent page
@@ -196,26 +196,26 @@ async function generateBreadcrumb(notionPage: any, notion: any): Promise<{ name:
     }
 
     breadcrumb.push(breadCrumbObject);
-    generateServiceUrl(notionPage); // Update block directly
+    generateServiceUrl(notionPage, links); // Update block directly
     breadcrumb[breadcrumb.length - 1].service_url = notionPage.service_url;
 
     return breadcrumb;
 }
 
-function generateServiceUrl(block: any): void {
+function generateServiceUrl(block: any, links?: string): void {
+    const baseUrl = links || serviceUrl; // Use req.query.links if provided, fallback to serviceUrl
     const url = block.public_url || block.url;
-    const url2 = block[block.type]?.public_url || block[block.type]?.url
+    const url2 = block[block.type]?.public_url || block[block.type]?.url;
+
     if (url) {
         const idMatch = url.match(/([a-zA-Z0-9]+)$/);
         const id = idMatch ? idMatch[1] : '';
-        block.service_url = serviceUrl + `${id}`;
+        block.service_url = baseUrl + `${id}`;
     } else if (url2) {
-        const url2 = block[block.type]?.public_url || block[block.type]?.url
         const idMatch = url2.match(/([a-zA-Z0-9]+)$/);
         const id = idMatch ? idMatch[1] : '';
-        block[block.type].service_url = serviceUrl + `${id}`;
-    }
-    else {
+        block[block.type].service_url = baseUrl + `${id}`;
+    } else {
         block.service_url = '';
         return;
     }
@@ -245,7 +245,10 @@ function decryptNk(encryptedNk: string): string {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     const encryptedNk = req.query.nk as string;
-    console.log(req.query);
+    const masterBlockId = req.query.id as string; // BlockID
+    const linksFormat = req.query.links as string;
+
+
     if (!encryptedNk) {
         return res.status(400).json({ message: "Missing 'nk' query parameter", status: 400 });
     }
@@ -260,7 +263,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const notion = new Client({ auth: decryptedNk });
     const test_page_Id = "1c4aaa7b9847809995d5d0b31fc6bcd1"; // PageID
     const results = [];
-    const masterBlockId = req.query.id as string; // BlockID
     let blocks;
 
     // Get the page the blocks reside on
@@ -282,7 +284,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (error.code === "object_not_found") {
             try {
                 // HANDLE SOLE DATABASE
-                let { database, rows } = await getDatabase(masterBlockId, notion);
+                let { database, rows } = await getDatabase(masterBlockId, notion, linksFormat);
                 if (!database || rows.length === 0) {
                     return res.status(500).json({ message: "Not Found", status: 500 });
                 }
@@ -292,7 +294,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     type: "child_database",
                 };
                 let master = { ...database };
-                master.breadcrumb = await generateBreadcrumb(database, notion);
+                master.breadcrumb = await generateBreadcrumb(database, notion, linksFormat);
                 results.push({ master });
                 results.push({ block });
                 return res.status(200).json(results);
@@ -310,7 +312,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     notionPage = await notion.pages.retrieve({ page_id: masterBlockId });
 
     // Get the breadcrumb for the page
-    const breadcrumb = await generateBreadcrumb(notionPage, notion);
+    const breadcrumb = await generateBreadcrumb(notionPage, notion, linksFormat);
     notionPage.breadcrumb = breadcrumb;
 
     // HANDLE SOLE SUB DATABASE PAGE
@@ -324,7 +326,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     for (const block of blocks.results) {
         try {
-            results.push({ block: await processBlock(block, notion) });
+            results.push({ block: await processBlock(block, notion, linksFormat) });
         } catch (error) {
             console.error('Error processing block:', error);
             // Skip the block if an error occurs
@@ -335,10 +337,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json(results);
 }
 
-async function getDatabase(id: string, notion: any): Promise<any> {
+async function getDatabase(id: string, notion: any, links?: string): Promise<any> {
     try {
         const database = await notion.databases.retrieve({ database_id: id });
-        const rows = await getDatabaseRows(id, notion);
+        const rows = await getDatabaseRows(id, notion, links);
         return { database, rows };
     } catch (error) {
         console.error('Failed to retrieve database:', error);
@@ -346,7 +348,7 @@ async function getDatabase(id: string, notion: any): Promise<any> {
     }
 }
 
-async function getDatabaseRows(id: string, notion: any): Promise<any> {
+async function getDatabaseRows(id: string, notion: any, links?: string): Promise<any> {
     // Query all rows of the database
     const rowsResults = await notion.databases.query({ database_id: id });
     const rows = rowsResults.results;
@@ -355,7 +357,7 @@ async function getDatabaseRows(id: string, notion: any): Promise<any> {
     for (const row of rows) {
         const page = await notion.pages.retrieve({ page_id: row.id });
         row.icon = extractIcon(page.icon); // Extract and store the icon
-        generateServiceUrl(row); // Update block directly
+        generateServiceUrl(row, links); // Update block directly
 
         // Check if the row includes an object of type 'people'
         if (row.properties) {

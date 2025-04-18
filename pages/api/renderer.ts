@@ -23,13 +23,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  const { id, nk } = req.query; // Extract 'id' from the query parameters
+  const { id, nk, links } = req.query; // Extract 'id' from the query parameters
 
   if (!id || id === 'null' || id === 'undefined') {
     return res.status(400).json({ error: 'No ID provided' });
   }
 
-  const response = await fetch(server + `get?id=${id}&nk=${nk}`, {
+  const response = await fetch(server + `get?id=${id}&nk=${nk}&links=${links}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
