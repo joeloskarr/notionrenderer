@@ -1196,7 +1196,7 @@ div.notion-database-database-page>.notion-database-navigation {
 
 .breadcrumb-bar {
     position: relative;
-    top: 0;
+    top: 20px;
     left: 0;
     width: 100%;
     background-color: var(--color-bg-default);
